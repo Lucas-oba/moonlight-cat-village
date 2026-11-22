@@ -1,14 +1,14 @@
 import type { ItemDef } from './types';
 // 數值皆暫定（CHAPTER1.md）
 export const ITEMS: Record<string, ItemDef> = {
-  cookie: { id: 'cookie', name: '小魚乾餅乾', kind: 'heal', desc: '香香脆脆的小魚乾餅乾。回復 20 HP。', heal: 20, price: 10, battle: true },
+  cookie: { id: 'cookie', name: '小魚乾餅乾', kind: 'heal', desc: '香香脆脆的小魚乾餅乾。回復 20 HP。', heal: 20, price: 10, battle: true, food: true },
   jelly: { id: 'jelly', name: '黏黏果凍', kind: 'material', desc: '史萊姆留下的果凍，Q 彈 Q 彈的。是魔物素材。' },
   wooden_sword: { id: 'wooden_sword', name: '小木劍', kind: 'weapon', desc: '橘貓守衛送的小木劍，會發出淡淡月光。攻擊 +2。', atk: 2 },
   moon_scale: { id: 'moon_scale', name: '月光鱗粉', kind: 'collect', desc: '月光蝴蝶的鱗粉，亮晶晶的。豆花送的禮物。' },
   courage_badge: { id: 'courage_badge', name: '勇氣徽章', kind: 'accessory', desc: '藏在大石頭下的舊徽章。拿著它，心裡就會湧出一點點勇氣。防禦 +1。', bonus: { def: 1 } },
-  sweet_potato: { id: 'sweet_potato', name: '烤番薯', kind: 'heal', desc: '番薯伯種的番薯，烤得香香甜甜。回復 30 HP。', heal: 30, price: 18, battle: true },
-  herb_candy: { id: 'herb_candy', name: '薄荷糖', kind: 'heal', desc: '銀杏婆婆做的草藥糖，涼涼的。回復 15 HP。', heal: 15, price: 7, battle: true },
-  herb_tea: { id: 'herb_tea', name: '香草茶', kind: 'heal', desc: '暖暖的香草茶。回復 40 HP。', heal: 40, price: 25, battle: true },
+  sweet_potato: { id: 'sweet_potato', name: '烤番薯', kind: 'heal', desc: '番薯伯種的番薯，烤得香香甜甜。回復 30 HP。', heal: 30, price: 18, battle: true, food: true },
+  herb_candy: { id: 'herb_candy', name: '薄荷糖', kind: 'heal', desc: '銀杏婆婆做的草藥糖，涼涼的。回復 15 HP。', heal: 15, price: 7, battle: true, food: true },
+  herb_tea: { id: 'herb_tea', name: '香草茶', kind: 'heal', desc: '暖暖的香草茶。回復 40 HP。', heal: 40, price: 25, battle: true, food: true },
   goblin_drawing: { id: 'goblin_drawing', name: '哥布林的畫', kind: 'key', desc: '用炭筆畫的圖：一群哥布林站在大樹下，大樹後面塗得黑黑的。' },
   forest_mushroom: { id: 'forest_mushroom', name: '森林蘑菇', kind: 'material', desc: '黑森林裡發光的小蘑菇。是素材。' },
   wolf_fur: { id: 'wolf_fur', name: '野狼的毛', kind: 'material', desc: '灰藍色、蓬蓬的毛。是素材。' },
@@ -20,11 +20,11 @@ export const ITEMS: Record<string, ItemDef> = {
   sweet_herb: { id: 'sweet_herb', name: '香香草', kind: 'material', desc: '草原上的香草，聞起來好舒服。' },
   silver_fish: { id: 'silver_fish', name: '銀光小魚', kind: 'material', desc: '小溪裡亮晶晶的小魚。' },
   iron_pot: { id: 'iron_pot', name: '大鐵鍋', kind: 'key', desc: '黑炭師傅借的大鐵鍋，好重。' },
-  fish_soup: { id: 'fish_soup', name: '月光魚湯', kind: 'heal', desc: '奶油老闆娘的招牌湯。全隊各回復 35 HP。', heal: 35, healAll: true, price: 40, battle: true },
+  fish_soup: { id: 'fish_soup', name: '月光魚湯', kind: 'heal', desc: '奶油老闆娘的招牌湯。全隊各回復 35 HP。', heal: 35, healAll: true, price: 40, battle: true, food: true },
   crate: { id: 'crate', name: '招財的貨箱', kind: 'key', desc: '寫著「划算喵」的木箱子。' },
   smoke_yarn: { id: 'smoke_yarn', name: '煙霧毛線球', kind: 'material', desc: '丟出去會冒煙的毛線球。（第一章先當收藏品）' },
   map_piece: { id: 'map_piece', name: '舊地圖碎片', kind: 'key', desc: '番薯伯年輕時畫的地圖，指向草原北邊的灌木叢。' },
-  moon_berry: { id: 'moon_berry', name: '月光莓', kind: 'heal', desc: '在月光下長大的莓果。全隊各回復 25 HP。', heal: 25, healAll: true, battle: true },
+  moon_berry: { id: 'moon_berry', name: '月光莓', kind: 'heal', desc: '在月光下長大的莓果。全隊各回復 25 HP。', heal: 25, healAll: true, battle: true, food: true },
   clover_clip: { id: 'clover_clip', name: '四葉草髮夾', kind: 'accessory', desc: '棉花送的髮夾。速度 +1。', bonus: { spd: 1 } },
   cotton_letter: { id: 'cotton_letter', name: '棉花的信', kind: 'key', desc: '粉紅色的信封，上面畫了一朵小花。' },
   mail: { id: 'mail', name: '柚子的信', kind: 'key', desc: '柚子要送的信。' },
@@ -38,7 +38,7 @@ export const ITEMS: Record<string, ItemDef> = {
   cat_ears: { id: 'cat_ears', name: '貓耳髮箍', kind: 'collect', desc: '可愛的貓耳朵髮箍。（外觀）' },
   raincoat: { id: 'raincoat', name: '月光雨衣', kind: 'collect', desc: '黃色的小雨衣，會反射月光。（外觀）' },
   yarn_ball: { id: 'yarn_ball', name: '毛線球', kind: 'collect', desc: '掉在路上的毛線球。編織店的貓奶奶好像在找。' },
-  star_candy: { id: 'star_candy', name: '星星糖', kind: 'heal', desc: '小學堂的獎品，甜甜的。回復 25 HP。', heal: 25, battle: true },
+  star_candy: { id: 'star_candy', name: '星星糖', kind: 'heal', desc: '小學堂的獎品，甜甜的。回復 25 HP。', heal: 25, battle: true, food: true },
   sticker_book: { id: 'sticker_book', name: '喵喵貼紙簿', kind: 'key', desc: '做好事、交朋友、發現祕密，都會得到貼紙喔。' },
 };
 // 喵喵貼紙簿：收藏冊，沒有上限。總數 = 這裡定義的貼紙數量，之後新增貼紙（例如新章節）總數會自動往上加。
@@ -61,6 +61,7 @@ export const STICKERS: Record<string, string> = {
   shiny_slime: '閃亮史萊姆', shiny_goblin: '閃亮哥布林', shiny_bat: '閃亮蝙蝠怪', shiny_fgoblin: '閃亮森林哥布林', shiny_wolf: '閃亮野狼', shiny_mushroom: '閃亮蘑菇怪',
 };
 // 動態計算（其他資料檔可能之後才把貼紙加進 STICKER_PAGES）
+export const chapter1Collection: { all?: string[]; monsters?: string[] } = {};
 export const bookIds = () => STICKER_PAGES.flatMap(p => p.ids);
 export const bookTotal = () => bookIds().length;
 export const bookCount = (st: string[]) => { const ids = bookIds(); return st.filter(k => ids.includes(k)).length; };

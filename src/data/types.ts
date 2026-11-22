@@ -3,9 +3,9 @@ import type { Voice } from '../core/sfx';
 export type Cond = {
   questActive?: string; questDone?: string; questNotDone?: string; questAvailable?: string; questNotStarted?: string;
   objCurrent?: [string, string]; objDone?: [string, string]; objNotDone?: [string, string];
-  flag?: string; notFlag?: string; time?: 'day' | 'night'; minObs?: number; minCourage?: number;
+  flag?: string; notFlag?: string; time?: 'day' | 'night'; minObs?: number; minCourage?: number; minKindness?: number; map?: string;
   inParty?: string; recruited?: string; notRecruited?: string; minActive?: number; maxActive?: number; weather?: 'rain' | 'clear'; minBond?: [string, number]; maxBond?: [string, number]; minCompanions?: number;
-  hasItem?: [string, number]; minStickers?: number; allStickers?: boolean; hasSticker?: string;
+  hasItem?: [string, number]; minStickers?: number; allStickers?: boolean; allChapter1Stickers?: boolean; hasSticker?: string;
   all?: Cond[]; any?: Cond[]; not?: Cond;
 };
 
@@ -16,7 +16,7 @@ export type Action =
   | { type: 'money'; n: number }
   | { type: 'buy'; id: string; price: number }
   | { type: 'flag'; id: string; value?: boolean }
-  | { type: 'stat'; courage?: number; observation?: number }
+  | { type: 'stat'; courage?: number; kindness?: number; observation?: number }
   | { type: 'exp'; n: number }
   | { type: 'sticker'; id: string }
   | { type: 'systemActivate' }
@@ -43,6 +43,8 @@ export type Action =
   | { type: 'fog'; x: number; y: number; n?: number }
   | { type: 'shake'; ms?: number }
   | { type: 'dim' }
+  | { type: 'stage'; playerLift?: number; at?: { x: number; y: number; dir?: number } }
+  | { type: 'walkOff'; npc: string; x: number; y: number; ms: number }
   | { type: 'quiz'; subject?: 'math' | 'english' | 'science' | 'chinese' | 'mix'; tier?: number; n?: number; by?: string; title?: string; ids?: string[] }
   | { type: 'learn'; id: string; skill: string }
   | { type: 'equip'; id: string }
@@ -70,18 +72,19 @@ export type ObjType = 'talk' | 'reach' | 'collect' | 'defeat' | 'inspect' | 'res
 export interface Objective { id: string; type: ObjType; text: string; targets?: string[]; count?: number; unique?: boolean; marker?: string[]; auto?: Cond; }
 export interface Reward { exp?: number; money?: number; items?: { id: string; n: number }[]; courage?: number; observation?: number; flags?: string[]; sticker?: string; }
 export interface QuestDef {
-  id: string; kind: 'main' | 'side'; no: number; title: string; giver?: string; summary: string;
+  id: string; chapter?: 2; kind: 'main' | 'side'; no: number; title: string; giver?: string; summary: string;
   prereq: string[]; bond?: [string, number]; autoStart?: boolean; ordered?: boolean; objectives: Objective[];
   rewards: Reward; rewardText?: string[]; unlocks?: string[]; onComplete?: string; comingSoon?: boolean;
 }
 
-export interface ItemDef { id: string; name: string; kind: 'heal' | 'material' | 'weapon' | 'accessory' | 'key' | 'collect'; desc: string; heal?: number; atk?: number; price?: number; battle?: boolean; healAll?: boolean; bonus?: { who?: string; atk?: number; def?: number; spd?: number; hp?: number }; }
+export interface ItemDef { id: string; name: string; kind: 'heal' | 'material' | 'weapon' | 'accessory' | 'key' | 'collect'; desc: string; heal?: number; atk?: number; price?: number; battle?: boolean; food?: boolean; healAll?: boolean; bonus?: { who?: string; atk?: number; def?: number; spd?: number; hp?: number }; }
 
 export interface EnemyDef {
   id: string; name: string; sprite: string; hp: number; atk: number; def: number; spd: number; exp: number; money: number;
   talkBase: number; talkLines: string[]; talkFail: string[]; gifts: { item: string; chance: number }[]; info?: string[];
-  skills?: { id: string; name: string; chance: number; power: number; status?: 'sticky' | 'stun' | 'sleep'; target?: 'all'; roar?: boolean; steal?: boolean; call?: boolean }[];
+  skills?: { id: string; name: string; chance: number; power: number; status?: 'sticky' | 'stun' | 'sleep' | 'bind' | 'cry'; target?: 'all'; roar?: boolean; steal?: boolean; call?: boolean; flee?: boolean }[];
   boss?: { lateTurn: number; lateHp: number; lateTalk: number; earlyTalk: number; lateLines: string[]; earlyLines: string[] };
+  likesFood?: boolean | string[];
   talkBonus?: { when: Cond; add: number };
   sticker?: string; // 貼紙用的魔物種類（同種魔物共用）
 }
@@ -96,6 +99,7 @@ export interface NpcDef {
   bob?: boolean;       // 原地輕輕上下動（例如發抖、跳舞）
   talk: { when?: Cond; d: string }[];
   giverOf?: string[];  // 可接的支線（顯示「！」）
+  followScale?: number; followGap?: number;
   follow?: Cond;       // 條件成立時，這個角色會跟在主角後面（跨地圖）
   goblin?: boolean;    // 哥布林（說話聲音不同）
   portraitH?: number;  // 對話時立繪高度
@@ -103,13 +107,13 @@ export interface NpcDef {
 }
 
 export interface PropDef { key: string; x: number; y: number; scale?: number; block?: [number, number]; glow?: boolean; flip?: boolean; hidden?: boolean; flipY?: boolean; when?: Cond; depth?: number; }
-export interface ExitDef { tx: number; ty: number; to: string; x: number; y: number; when?: Cond; lockedDialogue?: string; up?: boolean; dir?: number; needSize?: 'small' | 'big'; } // up：要往上走（面向門）才會進去
-export interface ZoneDef { id: string; x: number; y: number; w: number; h: number; }
-export interface GlintDef { id: string; map: string; x: number; y: number; obs: number; when?: Cond; once?: string; d: string; kind?: 'glint' | 'prints' | 'paw'; needSize?: 'small' | 'big'; sizeHint?: string; }
+export interface ExitDef { tx: number; ty: number; to: string; x: number; y: number; when?: Cond; lockedDialogue?: string; push?: [number, number]; up?: boolean; dir?: number; needSize?: 'small' | 'big'; } // up：要往上走（面向門）才會進去
+export interface ZoneDef { id: string; x: number; y: number; w: number; h: number; encounter?: string; }
+export interface GlintDef { id: string; map: string; x: number; y: number; obs: number; when?: Cond; once?: string; d: string; kind?: 'glint' | 'prints' | 'paw'; sprite?: string; spriteOrigin?: 'base'; needSize?: 'small' | 'big'; sizeHint?: string; }
 // 奇妙圈圈：站進去可以變小／變大（只在 area 範圍裡有效，走出去就變回來）
 export interface WonderDef { id: string; map: string; x: number; y: number; mode: 'small' | 'big'; area: { x: number; y: number; w: number; h: number }; when?: Cond; }
 export interface TriggerDef { id: string; map: string; when?: Cond; once: string; d: string; zone?: { x: number; y: number; w: number; h: number }; }
 export interface MapDef {
   id: string; name: string; tiles: string[]; props: PropDef[]; exits: ExitDef[]; zones: ZoneDef[];
-  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss'; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
+  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss' | 'mist' | 'roots'; mist?: boolean; labels?: { x: number; y: number; text: string; when?: Cond }[]; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
 }

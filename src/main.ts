@@ -6,6 +6,10 @@ import './data/bonds';
 import './data/events';
 import './data/whimsy';
 import './data/whimsy2';
+import './data/ch2_systems';
+import './data/ch2_main';
+import './data/ch2_side';
+import { MIST_ENTRANCE, ROOT_REST } from './data/ch2_maps';
 import { G } from './core/game';
 import { loadGame, healAll } from './core/state';
 import { Hud, DialogueBox, makeHooks, titleScreen, prologue, A, openSystemPanel } from './ui/ui';
@@ -24,7 +28,12 @@ import { check } from './core/conditions';
 const IMAGES = ['teasnail', 'flipmush', 'w_teatable', 'w_teapot', 'w_ftree', 'w_rsign', 'yuanyuan', 'yuanyuan_big', 'lulu', 'lulu_big', 'juanjuan', 'juanjuan_big', 'w_clock', 'w_shelf', 'w_shelf_ud', 'w_dew', 'w_cookie', 'w_hedge', 'w_sunflower', 'w_tulip', 'w_bell', 'w_circle', 'w_mushflower', 'w_gear', 'w_ladder', 'f_rocker_ud', 'f_plant_ud', 'f_barrel_ud', 'guard_spar', 'ali_feast', 'mint_feast', 'yuzu_feast', 'f_bed', 'f_table', 'f_shelf', 'f_fireplace', 'f_barrel', 'f_counter', 'f_anvil', 'f_loom', 'f_flowers', 'f_stove', 'f_herbs', 'f_sacks', 'f_plant', 'f_cupboard', 'f_rocker', 'hero_big', 'whitecat', 'whitecat_big', 'elder', 'elder_big', 'guard', 'guard_big', 'merchant', 'merchant_big', 'innkeeper', 'innkeeper_big', 'farmer', 'farmer_big', 'mochimom', 'mochimom_big', 'douhua', 'douhua_big',
   'slime', 'slime_small', 'house', 'ali', 'ali_big', 'mint', 'mint_big', 'yuzu', 'yuzu_big', 'ginkgo', 'ginkgo_big', 'gugu', 'gugu_big', 'goblin', 'sprout', 'sprout_big', 'chief', 'chief_big', 'fgoblin', 'fgoblin_big', 'fgoblin_b',
   'rock_boss', 'rock_map', 'rock_big', 'wolf', 'mushroom', 'bat', 'forestbg', 'ftree', 'glowshroom', 'tent', 'campfire', 'log', 'veggies', 'lantern_off', 'lantern_on', 'cabbage', 'sign', 'gate', 'stump', 'inn', 'elderhouse', 'fountain', 'tree', 'fence', 'fishrack', 'stall', 'hay', 'flowerpot', 'dummy', 'lamp', 'battlebg',
-  'cotton', 'cotton_big', 'toast', 'toast_big', 'charcoal', 'charcoal_big', 'nori', 'nori_big', 'weaver', 'weaver_big', 'lei', 'lei_big', 'afu', 'afu_big', 'mailbox', 'box', 'letter', 'flowershop', 'smithy', 'weaveshop', 'belltower', 'windmill'];
+  'cotton', 'cotton_big', 'toast', 'toast_big', 'charcoal', 'charcoal_big', 'nori', 'nori_big', 'weaver', 'weaver_big', 'lei', 'lei_big', 'afu', 'afu_big', 'mailbox', 'box', 'letter', 'flowershop', 'smithy', 'weaveshop', 'belltower', 'windmill',
+  'pudding', 'pudding_big', 'mistpuff', 'thornling', 'cryshroom', 'mistwolf', 'yarnweasel', 'mistbg',
+  'pengpeng', 'pengpeng_big', 'squirrelkid', 'mossantler_map',
+  'c2_bigtree', 'c2_house_broken', 'c2_house_fixed', 'c2_door', 'c2_vine', 'c2_net', 'c2_mosslog',
+  'c2_cloudline', 'c2_lamp_off', 'c2_lamp_on', 'c2_planks', 'c2_footprint',
+];
 
 class Boot extends Phaser.Scene {
   constructor() { super('Boot'); }
@@ -83,7 +92,13 @@ async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise
     s.money -= lost; const cLost = 0; s.stats.lost++; // 勇氣不扣（避免越輸越難）
     // 在黑森林、而且營火已經點起來：回到營火旁；不然回村莊
     const camp = s.map === 'forest' && s.quests.main10?.status === 'done';
-    const [rm, rx, ry] = camp ? ['forest', 5 * 32 + 40, 29 * 32 + 40] as const : ['village', 208, 446] as const;
+    const inChapter2 = s.map === 'mistpath' || s.map === 'rootvillage';
+    const rootRest = s.quests.c2m4?.status === 'done';
+    const rescue = inChapter2
+      ? { map: rootRest ? 'rootvillage' : 'mistpath', ...(rootRest ? ROOT_REST : MIST_ENTRANCE) }
+      : camp ? { map: 'forest', x: 5 * 32 + 40, y: 29 * 32 + 40 } : { map: 'village', x: 208, y: 446 };
+    const { map: rm, x: rx, y: ry } = rescue;
+    const place = inChapter2 ? (rootRest ? '大樹根村' : '紫霧林道入口') : camp ? '營火旁邊' : '村莊';
     healAll(s); s.map = rm; s.x = rx; s.y = ry; s.dir = 0;
     await G.ui.fade('', true);
     game.scene.wake('World'); world.placePlayer(rm, rx, ry, 0);
@@ -91,7 +106,7 @@ async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise
     await G.ui.unfade();
     G.busy--;
     await G.run('rescued');
-    const lines = [camp ? `被小白貓拖回營火旁邊了喵。` : `被小白貓救回村莊了喵。`, `掉了 ${lost} 魚乾幣${cLost ? '，勇氣值 -1' : ''}。`, '經驗值都還在喔，別灰心喵！'];
+    const lines = [`被小白貓救回${place}了喵。`, `掉了 ${lost} 魚乾幣${cLost ? '，勇氣值 -1' : ''}。`, '經驗值都還在喔，別灰心喵！'];
     if (!s.flags.firstLose) { s.flags.firstLose = true; lines.push('戰鬥失敗不會結束遊戲。休息一下，再出發吧喵！'); }
     await G.ui.reward('小白貓救了妳', lines);
   } else {
@@ -109,4 +124,4 @@ const game = new Phaser.Game({
   input: { activePointers: 3 },
 });
 // 測試用：網址加上 ?debug=1 可以在主控台使用 __mcv
-if (new URLSearchParams(location.search).has('debug')) (window as any).__mcv = { G, game, NPCS, check, DIALOGUES, GLINTS, TRIGGERS, QUESTS, MAPS, WONDERS };
+if (new URLSearchParams(location.search).has('debug')) (window as any).__mcv = { G, game, NPCS, check, DIALOGUES, GLINTS, TRIGGERS, QUESTS, MAPS, WONDERS, FIXED };
