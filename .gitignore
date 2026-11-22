@@ -1,0 +1,9 @@
+node_modules/
+dist/
+dist2/
+single/
+sim/out/
+screenshots/
+*.zip
+/tmp/
+.DS_Store
