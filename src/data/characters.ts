@@ -1,5 +1,5 @@
 // 隊伍成員（最多 3 人上場）。數值暫定。
-export type SkillKind = 'attack' | 'taunt' | 'guard' | 'heal' | 'cure' | 'allFoes' | 'dash' | 'guardAll' | 'healAll' | 'peek';
+export type SkillKind = 'attack' | 'taunt' | 'guard' | 'heal' | 'cure' | 'allFoes' | 'dash' | 'guardAll' | 'healAll' | 'peek' | 'purr' | 'sleepFoe';
 export interface SkillDef { id: string; name: string; mp: number; power: number; desc: string; learnLv: number; kind: SkillKind; quest?: boolean; }
 export interface MemberDef { id: string; name: string; role: string; icon: string; base: { hp: number; mp: number; atk: number; def: number; spd: number }; grow: { hp: number; mp: number; atk: number; def: number; spd: number }; skills: SkillDef[]; verb: string; }
 export const MEMBERS: Record<string, MemberDef> = {
@@ -14,7 +14,7 @@ export const MEMBERS: Record<string, MemberDef> = {
   mint: { id: 'mint', name: '薄荷', role: '草藥師（幫大家回血）', icon: 'mint', verb: '用藥草籃輕輕敲', base: { hp: 26, mp: 14, atk: 4, def: 3, spd: 5 }, grow: { hp: 5, mp: 3, atk: 1, def: 1, spd: 1 },
     skills: [
       { id: 'mint_heal', name: '薄荷療癒', mp: 3, power: 18, desc: '幫一位隊友回復 HP。', learnLv: 1, kind: 'heal' },
-      { id: 'calm_scent', name: '安神花香', mp: 2, power: 0, desc: '解除一位隊友的黏黏、暈暈、睡著。', learnLv: 1, kind: 'cure' },
+      { id: 'calm_scent', name: '安神花香', mp: 2, power: 0, desc: '幫一位隊友解除戰鬥中的不舒服。', learnLv: 1, kind: 'cure' },
       { id: 'herb_pack', name: '草藥小包', mp: 6, power: 12, desc: '幫全隊一起回復一點 HP。', learnLv: 1, kind: 'healAll', quest: true },
     ] },
   yuzu: { id: 'yuzu', name: '柚子', role: '小郵差（跑得快、丟毛線球）', icon: 'yuzu', verb: '丟出毛線球', base: { hp: 28, mp: 10, atk: 6, def: 3, spd: 9 }, grow: { hp: 5, mp: 2, atk: 2, def: 1, spd: 2 },

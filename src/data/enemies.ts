@@ -12,12 +12,14 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   gugu: {
     id: 'gugu', name: '哥布林咕咕', sprite: 'goblin', hp: 26, atk: 6, def: 2, spd: 6, exp: 30, money: 0, sticker: 'goblin',
+    likesFood: true,
     talkBase: 0.55, talkLines: ['……因為肚子好餓。'], talkFail: ['不、不要過來！（咕咕抱緊高麗菜，嚇得發抖）', '咕、咕咕！我不聽我不聽！'],
     gifts: [],
     skills: [{ id: 'stick', name: '小木棒亂揮', chance: 0.35, power: 1.1 }],
   },
   goblin: {
     id: 'goblin', name: '哥布林', sprite: 'goblin', hp: 22, atk: 7, def: 2, spd: 7, exp: 18, money: 10, sticker: 'goblin',
+    likesFood: true,
     talkBase: 0.45, talkLines: ['肚子好餓……好啦好啦，我不拿了啦。', '咕咕……妳好像不是壞人。我先走了！'],
     talkFail: ['咕！我才不怕妳！', '咕嘰嘰～（哥布林做了一個鬼臉）'],
     gifts: [{ item: 'sweet_potato', chance: 0.5 }],
@@ -26,6 +28,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   fgoblin: {
     id: 'fgoblin', name: '森林哥布林', sprite: 'fgoblin_b', hp: 26, atk: 8, def: 3, spd: 7, exp: 22, money: 12, sticker: 'fgoblin',
+    likesFood: true,
     talkBase: 0.35, talkBonus: { when: { questDone: 'main9' }, add: 0.35 },
     talkLines: ['妳就是救了小豆芽的人類？……我們走啦，謝謝妳。', '咕……妳的眼睛好溫柔。好啦，不打了。'],
     talkFail: ['咕咕！人類走開！', '咕嘰！這裡是我們的森林！'],
@@ -35,6 +38,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
   },
   wolf: {
     id: 'wolf', name: '森林野狼', sprite: 'wolf', hp: 34, atk: 10, def: 3, spd: 8, exp: 30, money: 14, sticker: 'wolf',
+    likesFood: true,
     talkBase: 0.3, talkLines: ['嗚……我們只是肚子餓。', '嗷嗚……妳不怕我們？好吧，我們回去了。'],
     talkFail: ['嗷嗚——！（野狼露出牙齒）', '嗚嚕嚕……（野狼還是很兇）'],
     gifts: [{ item: 'wolf_fur', chance: 0.7 }],
