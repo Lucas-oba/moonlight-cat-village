@@ -3,7 +3,7 @@ import { MAPS, TILE, GLINTS, TRIGGERS, WONDERS } from '../data/maps';
 import { NPCS } from '../data/npcs';
 import { QUESTS } from '../data/quests';
 import { ENCOUNTERS } from '../data/enemies';
-import type { NpcDef, GlintDef, MapDef, WonderDef } from '../data/types';
+import type { Cond, NpcDef, GlintDef, MapDef, WonderDef } from '../data/types';
 import { G } from '../core/game';
 import { check, objDone } from '../core/conditions';
 import { notify, currentObjective } from '../core/quests';
@@ -29,6 +29,10 @@ export class WorldScene extends Phaser.Scene {
   keys!: any; path: { x: number; y: number }[] = []; pathTarget: Interactable | null = null; tapMarker!: Phaser.GameObjects.Image;
   dir = 0; walkT = 0; stepAcc = 0; grassSteps = 0; nearest: Interactable | null = null; night!: Phaser.GameObjects.Rectangle; rain!: Phaser.GameObjects.Container; glows: Phaser.GameObjects.Image[] = [];
   transitioning = false; lastTile = '';
+  playerLift = 0;
+  mistOverlay?: Phaser.GameObjects.Rectangle;
+  vignette?: Phaser.FX.Vignette;
+  labels: { text: Phaser.GameObjects.Text; when?: Cond }[] = [];
   followSpawn: { x: number; y: number } | null = null; tapArmed = false; trail: { x: number; y: number }[] = [];
   followers: { def: NpcDef; spr: Phaser.GameObjects.Image; sh: Phaser.GameObjects.Image; x: number; y: number; walkT: number }[] = [];
   hud: any;
@@ -37,9 +41,11 @@ export class WorldScene extends Phaser.Scene {
   create() {
     blockTaps(300); this.tapArmed = false;
     G.world = this; buildIcons(this);
+    this.lastTile = '';
+    this.playerLift = 0; this.mistOverlay = undefined; this.vignette = undefined;
     this.npcs = []; this.glints = []; this.condProps = []; this.paws = []; this.followers = []; this.trail = []; this.glows = []; this.path = []; this.pathTarget = null;
     const s = G.s; this.map = MAPS[s.map]; s.size = 'normal'; this.wonderSprs = []; this.activeWonder = null; this.nearWonder = null;
-    const gk = 'ground_' + this.map.id; if (!this.textures.exists(gk)) buildGround(this, gk, this.map.tiles, !!this.map.forest);
+    const gk = 'ground_' + this.map.id; if (!this.textures.exists(gk)) buildGround(this, gk, this.map.tiles, !!this.map.forest, this.map.mist);
     const W = this.map.tiles[0].length * TILE, H = this.map.tiles.length * TILE;
     this.add.image(0, 0, gk).setOrigin(0).setDepth(-10);
     if (this.map.indoor) this.cameras.main.setBounds(0, -40, W, H + 160).setBackgroundColor('#1b120c');
@@ -59,11 +65,18 @@ export class WorldScene extends Phaser.Scene {
     for (const p of this.map.props) {
       if (p.when) continue; // 有條件的裝飾：在 refreshWorld 裡畫
       if (p.hidden) { if (p.block) this.blockRect(p.x - p.block[0] / 2, p.y - p.block[1], p.block[0], p.block[1]); continue; }
-      const im = this.add.image(p.x, p.y, p.key).setOrigin(.5, 1).setScale(p.scale ?? 1).setDepth(p.y).setFlipX(!!p.flip).setFlipY(!!p.flipY);
+      const im = this.add.image(p.x, p.y, p.key).setOrigin(.5, 1).setScale(p.scale ?? 1).setDepth(p.depth ?? p.y).setFlipX(!!p.flip).setFlipY(!!p.flipY);
       if (p.block) this.blockRect(p.x - p.block[0] / 2, p.y - p.block[1], p.block[0], p.block[1]);
       if (p.glow) { const g = this.add.image(p.x, p.y - 44, 'glow').setBlendMode(Phaser.BlendModes.ADD).setDepth(9001).setScale(1.1); this.glows.push(g); this.tweens.add({ targets: g, alpha: .7, duration: 1200, yoyo: true, repeat: -1 }); }
       void im;
     }
+    this.labels = (this.map.labels ?? []).map(l => {
+      const text = this.add.text(l.x, l.y, l.text, {
+        fontFamily: 'Huninn, sans-serif', fontSize: '15px', color: '#fff4de',
+        stroke: '#2d2639', strokeThickness: 4,
+      }).setOrigin(.5).setDepth(9004);
+      return { text, when: l.when };
+    });
     this.propBlocked = this.blocked.map(r => r.slice());
     // 主角
     this.shadow = this.add.image(0, 0, 'shadow').setDepth(0);
@@ -76,7 +89,9 @@ export class WorldScene extends Phaser.Scene {
     this.applyZoom(); this.scale.on('resize', this.applyZoom, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.applyZoom, this));
     // 夜晚
-    this.night = this.add.rectangle(0, 0, 4000, 4000, 0x141c5c, this.map.indoor ? .3 : .52).setOrigin(0).setScrollFactor(0).setDepth(9000);
+    const chapter2 = this.map.mist || this.map.id === 'rootvillage';
+    this.night = this.add.rectangle(0, 0, 4000, 4000, chapter2 ? 0x2d2448 : 0x141c5c,
+      this.map.mist ? .06 : chapter2 ? .26 : this.map.indoor ? .3 : .52).setOrigin(0).setScrollFactor(0).setDepth(9000);
     // 下雨天（只在村子裡、白天）：灰灰的天色 + 雨絲
     this.rain = this.add.container(0, 0).setScrollFactor(0).setDepth(9001).setVisible(false);
     if (this.map.id === 'village') {
@@ -89,7 +104,14 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     // 黑森林：四周暗暗的（暗角），只有中間看得清楚
-    if (this.map.forest) { const fx = (this.cameras.main as any).postFX?.addVignette?.(0.5, 0.5, 0.62, 0.55); this.events.once('shutdown', () => { try { (this.cameras.main as any).postFX?.remove(fx); } catch { /* ignore */ } }); }
+    if (this.map.forest) {
+      const postFX = this.cameras.main.postFX;
+      this.vignette = postFX?.addVignette?.(.5, .5, .62, this.map.mist ? .04 : .55);
+    }
+    if (this.map.mist) {
+      this.mistOverlay = this.add.rectangle(0, 0, 4000, 4000, 0xe1baff)
+        .setOrigin(0).setScrollFactor(0).setDepth(7999);
+    }
     this.refreshWorld();
     // 貼紙收藏家胸針：這張地圖有觀察力還不夠看到的閃光點時，提示一下
     if ((G.s.inventory.collector_pin ?? 0) > 0 && GLINTS.some(g => g.map === this.map.id && !(g.once && G.s.flags[g.once]) && check(G.s, g.when) && G.s.observation < g.obs))
@@ -121,6 +143,8 @@ export class WorldScene extends Phaser.Scene {
     }
   }
   placePlayer(map: string, x: number, y: number, dir = 0) {
+    this.playerLift = 0;
+    this.grassSteps = 0; this.stepAcc = 0;
     G.s.map = map; G.s.x = x; G.s.y = y; G.s.dir = dir;
     if (map !== this.map.id) this.scene.restart(); else { this.player.setPosition(x, y); this.dir = dir; this.player.setFrame(dir * 3); this.path = []; this.followers.forEach(f => { f.spr.destroy(); f.sh.destroy(); }); this.followers = []; this.refreshWorld(); music.play(this.map.music ?? 'village'); this.lastTile = ''; this.checkTriggers(); }
   }
@@ -138,6 +162,12 @@ export class WorldScene extends Phaser.Scene {
   }
   refreshWorld() {
     const s = G.s;
+    this.labels.forEach(l => l.text.setVisible(check(s, l.when)));
+    if (this.mistOverlay) {
+      const mist = s.kindness < 12 ? 0 : s.kindness < 20 ? 1 : 2;
+      this.mistOverlay.setFillStyle(0xe1baff, [.26, .17, .08][mist]);
+      if (this.vignette) this.vignette.strength = [.04, .025, .01][mist];
+    }
     if (this.player && this.player.texture.key !== heroKey(s)) this.player.setTexture(heroKey(s), this.dir * 3);
     const prevF = new Map(this.followers.map(f => [f.def.id, { x: f.x, y: f.y }]));
     this.night.setVisible(s.time === 'night' || !!this.map.nightAlways); this.rain.setVisible(s.weather === 'rain' && s.time === 'day'); this.glows.forEach(g => g.setVisible(s.time === 'night'));
@@ -170,13 +200,18 @@ export class WorldScene extends Phaser.Scene {
     this.drawWonders();
     // 有條件的裝飾（例如還掛在樹上的茶壺）
     this.condProps.forEach(c => c.destroy()); this.condProps = [];
-    for (const p of this.map.props) if (p.when && check(s, p.when)) this.condProps.push(this.add.image(p.x, p.y, p.key).setOrigin(.5, 1).setScale(p.scale ?? 1).setDepth(p.depth ?? p.y).setFlipX(!!p.flip).setFlipY(!!p.flipY));
+    for (const p of this.map.props) {
+      if (!p.when || !check(s, p.when)) continue;
+      if (p.block) this.blockRect(p.x - p.block[0] / 2, p.y - p.block[1], ...p.block);
+      if (!p.hidden) this.condProps.push(this.add.image(p.x, p.y, p.key).setOrigin(.5, 1)
+        .setScale(p.scale ?? 1).setDepth(p.depth ?? p.y).setFlipX(!!p.flip).setFlipY(!!p.flipY));
+    }
     // 閃光點
     this.glints.forEach(g => g.spr.destroy()); this.glints = [];
     for (const def of GLINTS) {
       if (def.map !== this.map.id) continue; if (def.once && s.flags[def.once]) continue; if (!check(s, def.when)) continue; if (s.observation < def.obs) continue;
-      const k = def.kind === 'prints' ? 'prints' : def.kind === 'paw' ? 'paw' : 'sparkle';
-      const spr = this.add.image(def.x, def.y, k).setDepth(def.y - 20);
+      const k = def.sprite ?? (def.kind === 'prints' ? 'prints' : def.kind === 'paw' ? 'paw' : 'sparkle');
+      const spr = this.add.image(def.x, def.y, k).setOrigin(.5, def.spriteOrigin === 'base' ? 1 : .5).setDepth(def.sprite ? def.y : def.y - 20);
       if (k !== 'sparkle') { const sp2 = this.add.image(def.x + 10, def.y - 10, 'sparkle').setDepth(def.y + 1).setScale(.8); this.tweens.add({ targets: sp2, alpha: .2, scale: .4, duration: 600, yoyo: true, repeat: -1 }); spr.once('destroy', () => sp2.destroy()); }
       else this.tweens.add({ targets: spr, alpha: .35, scale: .7, angle: 45, duration: 700, yoyo: true, repeat: -1 });
       this.glints.push({ def, spr });
@@ -185,6 +220,22 @@ export class WorldScene extends Phaser.Scene {
     this.paws.forEach(p => p.destroy()); this.paws = [];
     const gp = this.map.guidePaw; if (gp && check(s, gp.when)) gp.points.forEach(([x, y], i) => { const p = this.add.image(x + (i % 2 ? 8 : -8), y, 'paw').setDepth(-1).setAlpha(.2).setBlendMode(Phaser.BlendModes.ADD); this.tweens.add({ targets: p, alpha: 1, duration: 500, delay: (gp.points.length - i) * 160, yoyo: true, repeat: -1, repeatDelay: 900 }); this.paws.push(p); });
     this.hud.refresh();
+  }
+  stage(lift?: number, at?: { x: number; y: number; dir?: number }) {
+    if (at) {
+      this.player.setPosition(at.x, at.y);
+      this.dir = at.dir ?? this.dir;
+    }
+    if (lift != null) this.playerLift = lift;
+    this.refreshWorld();
+  }
+  async walkOff(id: string, x: number, y: number, duration: number) {
+    const n = this.npcs.find(n => n.def.id === id);
+    if (!n) return;
+    this.tweens.killTweensOf(n.spr);
+    await new Promise<void>(resolve => {
+      this.tweens.add({ targets: [n.spr, n.sh], x, y, alpha: 0, duration, onComplete: () => resolve() });
+    });
   }
   // 紫色的霧：從某個地方飄出來，然後慢慢散去
   fogBurst(x: number, y: number, n = 8) {
@@ -203,15 +254,19 @@ export class WorldScene extends Phaser.Scene {
   syncFollowers(defs: NpcDef[]) {
     const keep = new Set(defs.map(d => d.id));
     this.followers = this.followers.filter(f => { if (keep.has(f.def.id)) return true; f.spr.destroy(); f.sh.destroy(); return false; });
-    defs.forEach((def, i) => {
+    let gap = 0;
+    defs.forEach(def => {
+      gap += def.followGap ?? 26;
       if (this.followers.some(f => f.def.id === def.id)) return;
       // 出現在主角背後（面向的反方向）
-      const back = [[0, -1], [0, 1], [1, 0], [-1, 0]][this.dir] ?? [0, -1]; const gap = 26 * (i + 1);
-      let x = this.player.x + back[0] * gap, y = this.player.y + back[1] * gap;
-      if (this.hits(x, y) > 0) { x = this.player.x; y = this.player.y + 2; }
+      const [dx, dy] = [[0, -1], [0, 1], [1, 0], [-1, 0]][this.dir] ?? [0, -1];
+      const directions = def.followGap ? [[dx, dy], [dy, -dx], [-dy, dx], [-dx, -dy]] : [[dx, dy]];
+      const spot = directions.map(([x, y]) => [this.player.x + x * gap, this.player.y + y * gap])
+        .find(([x, y]) => this.hits(x, y) === 0);
+      let [x, y] = spot ?? [this.player.x, this.player.y + 2];
       if (this.followSpawn) { x = this.followSpawn.x; y = this.followSpawn.y; }
       const sh = this.add.image(x, y, 'shadow').setScale(.7);
-      const spr = this.add.image(x, y, spriteFor(G.s, def)).setOrigin(.5, 1).setScale(def.scale ?? 1).setInteractive();
+      const spr = this.add.image(x, y, spriteFor(G.s, def)).setOrigin(.5, 1).setScale(def.followScale ?? def.scale ?? 1).setInteractive();
       this.followers.push({ def, spr, sh, x, y, walkT: 0 });
     });
     this.followSpawn = null; this.trail = [];
@@ -220,9 +275,11 @@ export class WorldScene extends Phaser.Scene {
     if (!this.followers.length) return;
     const last = this.trail[this.trail.length - 1];
     if (!last || Math.hypot(last.x - this.player.x, last.y - this.player.y) > 3) { this.trail.push({ x: this.player.x, y: this.player.y }); if (this.trail.length > 200) this.trail.shift(); }
-    this.followers.forEach((f, i) => {
+    let want = 0;
+    this.followers.forEach(f => {
       // 沿著主角走過的路，保持一段距離跟著
-      const want = 28 * (i + 1); let acc = 0; let tx = f.x, ty = f.y; let found = false;
+      want += f.def.followGap ?? 28;
+      let acc = 0; let tx = f.x, ty = f.y; let found = false;
       for (let k = this.trail.length - 1; k > 0; k--) { acc += Math.hypot(this.trail[k].x - this.trail[k - 1].x, this.trail[k].y - this.trail[k - 1].y); if (acc >= want) { tx = this.trail[k - 1].x; ty = this.trail[k - 1].y; found = true; break; } }
       const dx = tx - f.x, dy = ty - f.y; const d = Math.hypot(dx, dy);
       const moving = found && d > 1.5;
@@ -241,7 +298,7 @@ export class WorldScene extends Phaser.Scene {
     // 跟在身後的夥伴優先度最低：同時點到村民和夥伴時，先跟村民說話
     for (const f of this.followers) { const b = f.spr.getBounds(); if (b.contains(wp.x, wp.y)) target = { kind: 'npc', def: f.def, spr: f.spr }; }
     for (const n of this.npcs) { const b = n.spr.getBounds(); if (b.contains(wp.x, wp.y)) target = { kind: 'npc', def: n.def, spr: n.spr }; }
-    for (const g of this.glints) if (Phaser.Math.Distance.Between(wp.x, wp.y, g.def.x, g.def.y) < 26) target = { kind: 'glint', def: g.def, spr: g.spr };
+    for (const g of this.glints) if (g.spr.getBounds().contains(wp.x, wp.y) || Phaser.Math.Distance.Between(wp.x, wp.y, g.def.x, g.def.y) < 26) target = { kind: 'glint', def: g.def, spr: g.spr };
     if (target && this.distTo(target) < 60) { this.path = []; this.doInteract(target); return; }
     const gx = target ? target.spr.x : wp.x, gy = target ? (target.kind === 'npc' ? (target.spr.getData('gy') ?? target.spr.y) - 4 : target.spr.y) : wp.y;
     const path = this.findPath(this.player.x, this.player.y - 4, gx, gy, !!target);
@@ -362,8 +419,8 @@ export class WorldScene extends Phaser.Scene {
     } else { this.player.setFrame(this.dir * 3); this.walkT = 0; }
     this.updateFollowers(dt);
     const bob = moving && Math.floor(this.walkT) % 2 === 1 ? 1 : 0; // 抬腳時身體上移 1 像素
-    this.player.setDisplayOrigin(this.player.width / 2, this.player.height + bob);
-    this.player.setDepth(this.player.y); this.shadow.setPosition(this.player.x, this.player.y - 1).setDepth(this.player.y - 1);
+    this.player.setDisplayOrigin(this.player.width / 2, this.player.height + bob + this.playerLift);
+    this.player.setDepth(this.player.y); this.shadow.setPosition(this.player.x, this.player.y - 1).setDepth(this.player.y - 1).setVisible(!this.playerLift);
     // 互動提示
     let best: Interactable | null = null, bd = 54;
     for (const n of this.npcs) { const t: Interactable = { kind: 'npc', def: n.def, spr: n.spr }; const d = this.distTo(t); if (d < bd) { bd = d; best = t; } }
@@ -393,7 +450,7 @@ export class WorldScene extends Phaser.Scene {
     const ex = this.map.exits.find(e => e.tx === tx && e.ty === ty);
     if (ex && !this.transitioning && !(ex.up && this.dir !== 1)) {
       if (check(G.s, ex.when) && (!ex.needSize || G.s.size === ex.needSize)) { this.transitioning = true; this.path = []; G.enqueue(async () => { sfx.transition(); await G.ui.fade(); this.placePlayer(ex.to, ex.x, ex.y, ex.dir ?? (ex.to === 'village' ? 1 : 0)); await new Promise(r => setTimeout(r, 200)); this.transitioning = false; await G.ui.unfade(); }); }
-      else { this.player.y += ex.up ? 12 : ex.ty === 0 ? 12 : -12; this.path = []; if (ex.lockedDialogue) G.run(ex.lockedDialogue); }
+      else { const [dx, dy] = ex.push ?? [0, ex.up || ex.ty === 0 ? 12 : -12]; this.player.x += dx; this.player.y += dy; this.path = []; if (ex.lockedDialogue) G.run(ex.lockedDialogue); }
       return;
     }
     if (key !== this.lastTile) { this.lastTile = key; this.checkTriggers(); }
@@ -409,7 +466,9 @@ export class WorldScene extends Phaser.Scene {
     if (cur?.id === 'tutorial') { const n = s.quests.main6.prog.tutorial ?? 0; this.startBattle(['tut1', 'tut2', 'tut3'][n], true); return; }
     const enabled = s.quests.main6 && objDone(s, 'main6', 'tutorial');
     if (!enabled) return;
-    const tbl = ENCOUNTERS[this.map.encounter!];
+    const { x, y } = this.player;
+    const zone = this.map.zones.find(z => z.encounter && x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
+    const tbl = ENCOUNTERS[zone?.encounter ?? this.map.encounter!];
     if (this.grassSteps >= tbl.minSteps && Math.random() < tbl.rate) this.startBattle(tbl.id, false);
   }
   startBattle(id: string, fixed: boolean) {

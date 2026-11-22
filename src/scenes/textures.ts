@@ -3,7 +3,7 @@ import { TILE } from '../data/maps';
 // 程式繪製的像素地面與小圖示（暖色、童話感，與生成的美術素材搭配）
 function rng(seed: number) { return () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 0x10000; }; }
 const SOLID_GRASS = '.,TGx';
-export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false) {
+export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false, mist = false) {
   const h = tiles.length, w = tiles[0].length; const T = TILE;
   const tex = scene.textures.createCanvas(key, w * T, h * T)!; const c = tex.getContext(); const r = rng(1234 + w * h);
   const at = (x: number, y: number) => (y < 0 || y >= h || x < 0 || x >= w) ? 'T' : tiles[y][x];
@@ -86,21 +86,21 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
         break;
       }
       case 'k': { // 黑森林地面
-        c.fillStyle = '#2f4a37'; c.fillRect(X, Y, T, T);
-        for (let i = 0; i < 9; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? '#263d2d' : '#3b5a42');
+        c.fillStyle = (mist ? '#615478' : '#2f4a37'); c.fillRect(X, Y, T, T);
+        for (let i = 0; i < 9; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? (mist ? '#554769' : '#263d2d') : (mist ? '#75638d' : '#3b5a42'));
         if (r() < .12) { const mx = X + 6 + r() * 18, my = Y + 8 + r() * 16; c.fillStyle = '#9ff3ff'; c.fillRect(mx, my, 4, 2); c.fillStyle = '#e9fdff'; c.fillRect(mx + 1, my + 2, 2, 3); }
         break;
       }
       case 'g': { // 黑森林草叢（會遇到魔物）
-        c.fillStyle = '#29402f'; c.fillRect(X, Y, T, T);
-        for (let i = 0; i < 7; i++) { const gx = X + 2 + r() * 26, gy = Y + 6 + r() * 24; c.fillStyle = '#1d3324'; c.fillRect(gx, gy - 8, 2, 8); c.fillRect(gx - 3, gy - 6, 2, 6); c.fillRect(gx + 3, gy - 6, 2, 6); c.fillStyle = '#5f8f62'; c.fillRect(gx, gy - 9, 2, 2); }
+        c.fillStyle = (mist ? '#524a6f' : '#29402f'); c.fillRect(X, Y, T, T);
+        for (let i = 0; i < 7; i++) { const gx = X + 2 + r() * 26, gy = Y + 6 + r() * 24; c.fillStyle = (mist ? '#413653' : '#1d3324'); c.fillRect(gx, gy - 8, 2, 8); c.fillRect(gx - 3, gy - 6, 2, 6); c.fillRect(gx + 3, gy - 6, 2, 6); c.fillStyle = (mist ? '#9b83b6' : '#5f8f62'); c.fillRect(gx, gy - 9, 2, 2); }
         break;
       }
       case 'q': { // 黑森林小路
-        c.fillStyle = '#2f4a37'; c.fillRect(X, Y, T, T); c.fillStyle = '#5c4a35'; c.fillRect(X + 3, Y + 3, T - 6, T - 6);
+        c.fillStyle = (mist ? '#615478' : '#2f4a37'); c.fillRect(X, Y, T, T); c.fillStyle = (mist ? '#91738a' : '#5c4a35'); c.fillRect(X + 3, Y + 3, T - 6, T - 6);
         const isq = (dx: number, dy: number) => 'q'.includes(at(x + dx, y + dy));
         if (isq(-1, 0)) c.fillRect(X, Y + 3, 4, T - 6); if (isq(1, 0)) c.fillRect(X + T - 4, Y + 3, 4, T - 6); if (isq(0, -1)) c.fillRect(X + 3, Y, T - 6, 4); if (isq(0, 1)) c.fillRect(X + 3, Y + T - 4, T - 6, 4);
-        for (let i = 0; i < 5; i++) px(X + 4 + r() * 24, Y + 4 + r() * 24, r() < .5 ? '#4b3b2a' : '#6e5a42');
+        for (let i = 0; i < 5; i++) px(X + 4 + r() * 24, Y + 4 + r() * 24, r() < .5 ? (mist ? '#765d76' : '#4b3b2a') : (mist ? '#ab87a0' : '#6e5a42'));
         break;
       }
       case 'd': { c.fillStyle = '#e8d39c'; c.fillRect(X, Y, T, T); for (let i = 0; i < 8; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? '#d6bd7f' : '#f3e2b5'); break; }
