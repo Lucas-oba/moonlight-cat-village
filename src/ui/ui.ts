@@ -320,7 +320,7 @@ export async function prologue(dlg: DialogueBox): Promise<string> {
   let name = '';
   const show = async (k: string) => { img.style.opacity = '0'; await wait(400); img.style.backgroundImage = `url(${A(k)})`; img.style.opacity = '1'; await wait(700); };
   await show('prologue1');
-  await say('narr', '早上七點半，臺灣的街道熱熱鬧鬧。機車噗噗地開過去，早餐店飄來包子的香味。');
+  await say('narr', '早上七點半，台北的街道熱熱鬧鬧。機車噗噗地開過去，早餐店飄來包子的香味。');
   await say('narr', '一個背著黃色書包的女孩，正走在上學的路上。');
   dlg.hide();
   name = await new Promise<string>(res => {
