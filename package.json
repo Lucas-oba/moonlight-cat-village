@@ -1,0 +1,24 @@
+{
+  "name": "moonlight-cat-village",
+  "private": true,
+  "version": "0.8.2",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "restore-binaries": "node tools/restore_binaries.mjs",
+    "postinstall": "node tools/restore_binaries.mjs --if-missing",
+    "sim:build": "node sim/build.mjs",
+    "sim": "node sim/build.mjs && node sim/out/sim.mjs 1000 all",
+    "single": "python3 tools_singlefile.py"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "playwright": "^1.48.0"
+  }
+}
