@@ -52,7 +52,7 @@ try {
   await readDialogue('小葵走著走著');
   await readDialogue('白貓看著她，眨了一下眼睛。');
   await readDialogue('咦？你的領結好漂亮');
-  await readDialogue('白貓跳進兩棟公寓之間的消防巷', 'prologue2', 'prologue_2');
+  await readDialogue('白貓跳進路邊的小巷子', 'prologue2', 'prologue_2');
   await readDialogue('上學會遲到啦');
 
   const alley = page.getByRole('button', { name: '點巷口 跟上去', exact: true });

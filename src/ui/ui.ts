@@ -305,7 +305,7 @@ export function titleScreen(): Promise<'new' | 'continue'> {
     if (save) { const c = el('button', 'big-btn', `繼續遊戲<div style="font-size:13px">${save.name}・Lv ${save.members.hero.lv}</div>`, m); c.onclick = () => { sfx.unlock(); sfx.ok(); sc.remove(); res('continue'); }; }
     const n = el('button', 'big-btn' + (save ? ' alt' : ''), '新遊戲', m);
     n.onclick = () => { sfx.unlock(); sfx.ok(); if (save && !confirm('開始新遊戲會覆蓋原本的存檔（存檔時）。確定嗎？')) return; sc.remove(); res('new'); };
-    el('div', 'version', '試玩版 0.8.2', sc);
+    el('div', 'version', '試玩版 0.8.3', sc);
     const sb = el('button', 'title-snd', settings.music || settings.sfx ? '🔊' : '🔇', sc);
     sb.onclick = (e) => { e.stopPropagation(); const on = !(settings.music || settings.sfx); settings.music = on; settings.sfx = on; saveSettings(); sb.textContent = on ? '🔊' : '🔇'; if (on) sfx.ok(); };
     music.play('title');
@@ -336,7 +336,7 @@ export async function prologue(dlg: DialogueBox): Promise<string> {
   await say('narr', '白貓看著她，眨了一下眼睛。');
   await say('hero', '咦？你的領結好漂亮……你要去哪裡？');
   await show('prologue2');
-  await say('narr', '白貓跳進兩棟公寓之間的消防巷，回頭看了她一眼。');
+  await say('narr', '白貓跳進路邊的小巷子，回頭看她一眼。');
   await say('hero', '上學會遲到啦……可是牠好像在等我。', { think: true });
   dlg.hide();
   await new Promise<void>(res => { const h = el('button', 'alley-hint', '點巷口<br>跟上去', sc); h.style.background = 'transparent'; h.onclick = () => { h.remove(); res(); }; });
