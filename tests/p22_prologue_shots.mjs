@@ -29,7 +29,8 @@ try {
     if (image) {
       await panel.evaluate(async (element, expected) => {
         const src = getComputedStyle(element).backgroundImage.match(/^url\("(.*)"\)$/)?.[1];
-        if (!src || !new URL(src).pathname.endsWith(`/${expected}.jpg`)) {
+        const embedded = window.__MCV_ASSETS?.[`${expected}.jpg`];
+        if (!src || !(embedded ? src === embedded : new URL(src).pathname.endsWith(`/${expected}.jpg`))) {
           throw new Error(`未顯示序章圖片 ${expected}`);
         }
         const loaded = new Image();
