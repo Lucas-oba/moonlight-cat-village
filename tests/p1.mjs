@@ -1,0 +1,21 @@
+import { launch, shot, sleep, advance, state, tapTo, tapNpc, joystick } from './lib.mjs';
+const { browser, page, errors } = await launch();
+await page.evaluate(() => localStorage.clear()); await page.reload();
+await sleep(2500); await shot(page, '01_title');
+await page.click('text=新遊戲'); await sleep(1500);
+await shot(page, '02_prologue1');
+await advance(page, { stopOn: async () => !!(await page.$('.name-box')) });
+await page.fill('.name-box input', '小葵'); await shot(page, '03_name'); await page.click('.name-box button');
+await advance(page, { stopOn: async () => !!(await page.$('.alley-hint')) });
+await shot(page, '04_prologue2'); await page.click('.alley-hint'); await sleep(2500);
+await shot(page, '05_prologue3');
+await advance(page); await sleep(1500);
+await advance(page); await sleep(500);
+await shot(page, '06_arrive');
+console.log(await state(page));
+// 搖桿往上走
+await joystick(page, 0, -50, 1500); await sleep(200);
+console.log('after joystick', await state(page));
+await shot(page, '07_joystick');
+console.log('errors', errors);
+await browser.close();

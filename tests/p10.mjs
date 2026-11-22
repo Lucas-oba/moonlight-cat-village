@@ -1,0 +1,37 @@
+// 頭目戰 + 主線 12 結尾
+import { launch, sleep, shot, state, advance, play, warp, tapNpc, battle2, inBattle } from './lib.mjs';
+const T = 32; const c = n => n * T + 16;
+const { browser, page, errors } = await launch('http://localhost:4173/?debug=1&skip=1');
+await sleep(2500);
+await page.evaluate(() => {
+  const G = window.__mcv.G; const s = G.s;
+  for (const q of ['main1','main2','main3','main4','main5','main6','side2','main7','main8','main9','main10','side1','side5']) s.quests[q] = { status: 'done', prog: {}, seen: {} };
+  Object.assign(s.flags, { system: true, catSpeech: true, tut_status: true, tut_quests: true, seen_arrive: true, seen_meadow: true, forest_open: true, choiceA: true, herb_shop: true, seen_m9_enter: true });
+  s.weapon = 'wooden_sword'; s.inventory = { wooden_sword: 1, cookie: 5, herb_candy: 3 }; s.money = 300; s.time = 'day';
+  s.members.hero.lv = 6; G.ensureMember('ali'); G.ensureMember('mint'); s.members.ali.joined = true; s.members.mint.joined = true; s.members.ali.lv = 6; s.members.mint.lv = 6; s.party = ['hero', 'ali', 'mint'];
+  G.load(s); G.exec({ type: 'rest' }); G.world.placePlayer('forest', 11 * 32 + 16, 35 * 32 + 16, 0);
+});
+await sleep(1500); await advance(page, { log: true });
+console.log((await state(page)).quests.main11);
+await page.evaluate(() => { window.__mcv.G.world.onGrassStep = () => {}; });
+await warp(page, 'forest', c(11), c(38));
+const t0 = Date.now(); let k = 0;
+const watch = setInterval(async () => { try { await shot(page, `dbg_boss_${k++}`); console.log('watch', JSON.stringify(await page.evaluate(() => ({ msg: document.querySelector('.bmsg')?.textContent, btns: [...document.querySelectorAll('.cmds button, .sublist button')].map(b => b.textContent + (b.disabled ? '(x)' : '')), dlg: document.querySelector('.dlg:not(.hidden) .dlg-box')?.textContent })))); } catch {} }, 20000);
+await play(page, { hero: t => (t <= 5 ? "attack" : "talk"), shots: { 1: '74_boss_battle', 7: '75_boss_late' } });
+clearInterval(watch);
+const st = await state(page); console.log('main11', st.quests.main11, 'main12', st.quests.main12, 'map', st.map, (Date.now() - t0) / 1000, 's', 'talked', await page.evaluate(() => window.__mcv.G.s.flags.boss_talked));
+await play(page);
+await warp(page, 'village', c(10), c(12)); await play(page); await shot(page, '76_moon_feast');
+await tapNpc(page, 'elder'); await play(page);
+await warp(page, 'village', c(6), c(6)); await sleep(500); await shot(page, '77_whitecat_roof');
+await tapNpc(page, 'whitecat'); await play(page);
+console.log('main12', (await state(page)).quests.main12);
+await warp(page, 'meadow', c(12), c(13)); await sleep(500); await shot(page, '78_paw_trail');
+await warp(page, 'meadow', c(12), c(17));
+await advance(page, { log: true, stopOn: async () => !!(await page.$('.chap-end')) });
+await sleep(4000); await shot(page, '79_chapter_end');
+await page.click('.chap-end .big-btn').catch(e => console.log('no btn', e.message)); await sleep(800); await advance(page, { log: true });
+console.log('final', (await state(page)).quests.main12, 'chapterDone', await page.evaluate(() => window.__mcv.G.s.chapterDone));
+await shot(page, '80_after_chapter');
+console.log('errors', errors);
+await browser.close();
