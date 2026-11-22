@@ -9,9 +9,9 @@ import { music } from '../core/music';
 import { NPCS } from '../data/npcs';
 import { objDone } from '../core/conditions';
 
-export const A = (k: string) => { const f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'title'].includes(k) ? 'jpg' : 'png'}`; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
+export const A = (k: string) => { const f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'mistbg', 'title'].includes(k) ? 'jpg' : 'png'}`; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
 import { quizPanel } from './quiz';
-import { STICKER_PAGES, bookCount, bookTotal, bookPages } from '../data/items';
+import { STICKER_PAGES, bookCount, bookTotal, bookPages, chapter1Collection } from '../data/items';
 import { ENEMIES } from '../data/enemies';
 import { MAPS } from '../data/maps';
 import { LANTERNS, TRADES } from '../data/ch1c';
@@ -57,7 +57,7 @@ export class Hud {
   showMapName(n: string) { this.mapName.textContent = n; this.mapName.classList.add('show'); setTimeout(() => this.mapName.classList.remove('show'), 1600); }
   refresh() {
     const s = G.s; const st = memberStats(s, 'hero'); const m = s.members.hero;
-    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div>`;
+    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div><div class="hud-values"><span>🦁 勇氣值 ${s.courage}</span><span>💗 善良值 ${s.kindness}</span></div>`;
     this.money.innerHTML = `🐟 ${s.money}`;
     this.sysBtn.classList.toggle('hidden', !s.flags.system);
     const q = s.tracked && s.quests[s.tracked]?.status === 'active' ? s.tracked : undefined;
@@ -65,7 +65,7 @@ export class Hud {
       const o = currentObjective(s, q); const def = QUESTS[q];
       const objs = def.ordered ? (o ? [o] : []) : def.objectives.filter(x => !objDone(s, q, x.id));
       const lines = objs.map(x => `・${x.text}${x.count && x.count > 1 ? `（${s.quests[q].prog[x.id] ?? 0}/${x.count}）` : ''}`).join('<br>');
-      this.tracker.innerHTML = `<b>${def.kind === 'main' ? '主線' : '支線'} ${def.no}：${def.title}</b>${lines}`;
+      this.tracker.innerHTML = `<b>${G.questTitle(q)}</b>${lines}`;
       this.tracker.classList.remove('hidden');
     } else this.tracker.classList.add('hidden');
   }
@@ -123,7 +123,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         <div class="stat"><span>HP</span><b>${m.hp} / ${st.maxHp}</b></div><div class="stat"><span>MP</span><b>${m.mp} / ${st.maxMp}</b></div>
         <div class="stat"><span>攻擊</span><b>${st.atk}</b></div><div class="stat"><span>防禦</span><b>${st.def}</b></div>
         <div class="stat"><span>速度</span><b>${st.spd}</b></div><div class="stat"><span>魚乾幣</span><b>${s.money}</b></div>
-        <div class="stat hl"><span>🦁 勇氣值</span><b>${s.courage}</b></div><div class="stat hl"><span>🔍 觀察力</span><b>${s.observation}</b></div>
+        <div class="stat hl"><span>🦁 勇氣值</span><b>${s.courage}</b></div><div class="stat hl"><span>💗 善良值</span><b>${s.kindness}</b></div><div class="stat hl"><span>🔍 觀察力</span><b>${s.observation}</b></div>
         </div>
         <div style="margin-top:10px">技能：<span class="tagline">勇氣揮擊（MP 3）</span></div>
         <div>裝備：<span class="tagline">${s.weapon ? ITEMS[s.weapon].name : '（無）'}</span></div>
@@ -142,7 +142,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
           if (s.flags.party_outfit) { const b = el('button', s.feast ? 'on' : '', (s.feast ? '✓ ' : '') + '夥伴月光宴會裝', row); b.onclick = () => { s.feast = !s.feast; sfx.ok(); G.world?.refreshWorld?.(); render('status'); }; }
         }
       } else if (t === 'quests') {
-        const list = Object.entries(s.quests).filter(([k, v]) => QUESTS[k].kind === qtab && v.status !== 'available' && k !== 'main1').sort((a, b) => (a[1].status === 'done' ? 1 : 0) - (b[1].status === 'done' ? 1 : 0) || QUESTS[a[0]].no - QUESTS[b[0]].no);
+        const list = Object.entries(s.quests).filter(([k, v]) => QUESTS[k].kind === qtab && v.status !== 'available' && k !== 'main1').sort((a, b) => (a[1].status === 'done' ? 1 : 0) - (b[1].status === 'done' ? 1 : 0) || (QUESTS[b[0]].chapter ?? 1) - (QUESTS[a[0]].chapter ?? 1) || QUESTS[a[0]].no - QUESTS[b[0]].no);
         body.innerHTML = `${tutorial === 'quests' ? '<div class="tut">喵！這是任務日誌。上面可以切換「主線」和「支線」。按「追蹤」，目標就會顯示在畫面左上角喵！</div>' : ''}`;
         const sub = el('div', 'sub-tabs', '', body);
         (['main', 'side'] as const).forEach(k => { const b = el('button', k === qtab ? 'on' : '', k === 'main' ? '主線' : '支線', sub); b.onclick = () => { qtab = k; sfx.blip(); render('quests'); }; });
@@ -150,7 +150,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         for (const [k, v] of list) {
           const d = QUESTS[k]; const done = v.status === 'done';
           const it = el('div', 'q-item' + (s.tracked === k ? ' tracked' : '') + (done ? ' done-q' : ''), '', body);
-          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${d.no}. ${d.title}`, it);
+          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${d.chapter === 2 ? '第二章・' : ''}${d.no}. ${d.title}`, it);
           if (!done) { const tb = el('button', 'trk', s.tracked === k ? '追蹤中' : '追蹤', h); tb.onclick = () => { s.tracked = k; sfx.ok(); G.ui.refresh(); render('quests'); }; }
           el('p', '', d.summary + (d.giver ? `（請妳幫忙的是：${NPCS.find(n => n.id === d.giver)?.name ?? d.giver}）` : ''), it);
           const ul = el('ul', '', '', it); const cur = currentObjective(s, k);
@@ -178,8 +178,8 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         PAGES.forEach((pg, k) => { const n = pg.ids.filter(i => s.stickers.includes(i)).length; const b = el('button', k === spage ? 'on' : '', `${pg.name}<small> ${n}/${pg.ids.length}</small>`, sub); b.onclick = () => { spage = k; sfx.blip(); render('stickers'); }; });
         const grid = el('div', 'sb-grid', '', body); const pg = PAGES[spage];
         pg.ids.forEach((i, k) => { const ic = STICKER_ICON[pg.id] ?? ['⭐']; const have = s.stickers.includes(i); el('div', 'sb-st' + (have ? ' have ' + pg.id : ''), have ? `<span>${ic[k % ic.length]}</span><small>${STICKERS[i]}</small>` : '<span>？</span><small>還沒拿到</small>', grid); });
-        el('div', 'sb-tip', '集滿 10、20、30、40、50 張，或是全部集滿，可以去長老家領獎勵喵！貼紙會越來越多喔。', body);
-        if (pg.id === 'monster' && (STICKER_PAGES.find(c => c.id === 'monster')?.ids ?? []).every(i => s.stickers.includes(i))) { const b = el('button', 'qz-next', '📖 打開魔物圖鑑', body); b.onclick = () => { sfx.blip(); bestiary(body); }; }
+        el('div', 'sb-tip', '集滿 10、20、30、40、50 張，或是集滿第一章的貼紙，可以去長老家領獎勵喵！貼紙會越來越多喔。', body);
+        if (pg.id === 'monster' && (chapter1Collection.monsters ?? STICKER_PAGES.find(c => c.id === 'monster')?.ids ?? []).every(i => s.stickers.includes(i))) { const b = el('button', 'qz-next', '📖 打開魔物圖鑑', body); b.onclick = () => { sfx.blip(); bestiary(body); }; }
       } else if (t === 'settings') {
         body.innerHTML = '';
         soundSettings(body);
@@ -305,7 +305,7 @@ export function titleScreen(): Promise<'new' | 'continue'> {
     if (save) { const c = el('button', 'big-btn', `繼續遊戲<div style="font-size:13px">${save.name}・Lv ${save.members.hero.lv}</div>`, m); c.onclick = () => { sfx.unlock(); sfx.ok(); sc.remove(); res('continue'); }; }
     const n = el('button', 'big-btn' + (save ? ' alt' : ''), '新遊戲', m);
     n.onclick = () => { sfx.unlock(); sfx.ok(); if (save && !confirm('開始新遊戲會覆蓋原本的存檔（存檔時）。確定嗎？')) return; sc.remove(); res('new'); };
-    el('div', 'version', '試玩版 0.8.3', sc);
+    el('div', 'version', '試玩版 0.9.0', sc);
     const sb = el('button', 'title-snd', settings.music || settings.sfx ? '🔊' : '🔇', sc);
     sb.onclick = (e) => { e.stopPropagation(); const on = !(settings.music || settings.sfx); settings.music = on; settings.sfx = on; saveSettings(); sb.textContent = on ? '🔊' : '🔇'; if (on) sfx.ok(); };
     music.play('title');
@@ -369,7 +369,7 @@ export function travelPanel(): Promise<void> {
     const close = () => { wrap.remove(); res(); };
     for (const l of LANTERNS.filter(l => G.s.flags[l.id] && !(l.map === G.s.map && Math.hypot(l.x - G.world.player.x, l.y - G.world.player.y) < 120))) {
       const row = el('div', 'inv-row', `<div><b>${l.name}</b><small>${MAPS[l.map].name}</small></div>`, body); const b = el('button', '', '去', row);
-      b.onclick = async () => { sfx.ok(); close(); await fade('', true); G.world.placePlayer(l.map, l.x, l.y + 40, 0); await unfade(); };
+      b.onclick = async () => { sfx.ok(); wrap.remove(); await fade('', true); G.world.placePlayer(l.map, l.x, l.y + 40, 0); await unfade(); res(); };
     }
     if (!body.children.length) el('div', 'money', '還沒有其他亮著的燈籠喵。先去點亮別的燈籠吧！', body);
     x.onclick = () => { sfx.blip(); close(); };

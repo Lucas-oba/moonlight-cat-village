@@ -28,7 +28,9 @@ export async function advance(page, { choices = [], max = 60, log = true, stopOn
     if (await vis(page, '.dlg')) {
       const btns = await page.$$('.dlg .choices button');
       if (btns.length) { const want = choices.shift(); let hit = null; for (const b of btns) { const t = await b.textContent(); if (want && t.includes(want)) hit = b; } hit = hit || btns[0]; texts.push('[CHOICE] ' + await hit.textContent()); await hit.click(); idle = 0; await sleep(250); continue; }
-      const t = await page.textContent('.dlg-box'); await page.click('.dlg-box'); await sleep(60); await page.click('.dlg-box').catch(() => {});
+      const t = await page.textContent('.dlg-box'); await page.click('.dlg-box'); await sleep(60);
+      const box = page.locator('.dlg:not(.hidden) .dlg-box');
+      if (await box.isVisible()) await box.click({ timeout: 800 }).catch(() => {});
       texts.push(t.replace('▼', '').trim()); idle = 0; await sleep(200); continue;
     }
     idle++; await sleep(250);
@@ -112,7 +114,7 @@ export async function battle2(page, hero = 'attack', shots = {}) {
       const msg = (await page.textContent('.bmsg')) || '';
       if (msg.startsWith(heroName)) {
         turn++; if (shots[turn]) await shot(page, shots[turn]);
-        const s = typeof hero === 'function' ? hero(turn) : hero;
+        const s = typeof hero === 'function' ? await hero(turn) : hero;
         const label = { attack: '攻擊', skill: '技能', talk: '對話', defend: '防禦', run: '逃跑', item: '道具' }[s];
         await page.click(`.cmds button:has-text("${label}")`); await sleep(200);
       } else {

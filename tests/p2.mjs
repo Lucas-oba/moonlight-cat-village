@@ -22,7 +22,9 @@ await tapNpc(page, 'elder'); await advance(page, { stopOn: async () => !!(await 
 await advance(page, { stopOn: async () => !!(await page.$('.reward')) }); await shot(page, '13_quest_reward');
 await advance(page); await sleep(800);
 await q('main4 done'); await shot(page, '14_morning');
-// 主線 5
+// 主線 5（先等早晨過場完全結束，避免點擊被吃掉）
+for (let i = 0; i < 80; i++) { if ((await state(page)).busy === 0 && !(await page.$('.dlg-box'))) break; await advance(page); await sleep(250); }
+await sleep(600);
 await tapNpc(page, 'merchant'); await advance(page, { choices: ['買一個'] });
 await tapNpc(page, 'innkeeper'); await advance(page, { choices: ['休息並存檔'] });
 await tapNpc(page, 'farmer'); await advance(page);

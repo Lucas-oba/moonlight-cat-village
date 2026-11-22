@@ -1,3 +1,4 @@
+import { CH2_QUIZ } from '../data/quiz_ch2';
 // 喵喵小學堂：解題面板（大大的選項按鈕；答錯沒有懲罰，貓咪給提示再試一次）
 import { el, root, A } from './ui';
 import { G } from '../core/game';
@@ -10,7 +11,11 @@ function shuffle<T>(a: T[]) { const b = [...a]; for (let i = b.length - 1; i > 0
 // 選題：同科目、同難度；最近做過的題目先不出
 export function chooseQuestions(o: QuizOpts): QuizQ[] {
   const s = G.s; const qz = (s.quiz ??= { seen: [], correct: 0, wrong: 0 });
-  if (o.ids) return o.ids.map(id => QUIZ.find(q => q.id === id)!).filter(Boolean);
+  if (o.ids) {
+    const questions = o.ids.map(id => QUIZ.find(q => q.id === id) ?? CH2_QUIZ.find(q => q.id === id))
+      .filter((q): q is QuizQ => q !== undefined);
+    return o.n == null ? questions : shuffle(questions).slice(0, o.n);
+  }
   const n = o.n ?? 1; const tier = o.tier ?? 1;
   let pool = QUIZ.filter(q => (!o.subject || o.subject === 'mix' || q.subject === o.subject));
   const exact = pool.filter(q => q.tier === tier); if (exact.length >= n) pool = exact; else pool = pool.filter(q => q.tier <= tier);
