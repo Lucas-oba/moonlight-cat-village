@@ -187,7 +187,7 @@ addTalk('elder', [
   { when: ocur('side4', 'taste'), d: 'side4_taste_elder' },
   { when: { questAvailable: 'side14' }, d: 'side14_start' }, { when: ocur('side14', 'report'), d: 'side14_report' },
   { when: { questAvailable: 'side19' }, d: 'side19_start' },
-  { when: { any: [...[10, 20, 30, 40, 50].map(n => ({ all: [{ minStickers: n }, { notFlag: 'sb' + n }] })), { all: [{ allStickers: true }, { notFlag: 'sb60' }] }] }, d: 'elder_board' },
+  { when: { any: [...[10, 20, 30, 40, 50].map(n => ({ all: [{ minStickers: n }, { notFlag: 'sb' + n }] })), { all: [{ allChapter1Stickers: true }, { notFlag: 'sb60' }] }] }, d: 'elder_board' },
   { when: { all: [{ time: 'night' }, { questDone: 'main6' }] }, d: 'elder_story' },
 ]);
 addTalk('guard', [{ when: ocur('side4', 'taste'), d: 'side4_taste_guard' }, { when: { all: [ocur('side9', 'clue'), notF('c9_guard')] }, d: 'side9_clue_guard' }]);
@@ -679,7 +679,7 @@ const D: Record<string, Dialogue> = {
     { s: 'system', t: '30 張貼紙的獎勵：「貼紙收藏家胸針」！觀察力 +1！', when: { all: [{ minStickers: 30 }, { notFlag: 'sb30' }] }, act: [{ type: 'flag', id: 'sb30' }, { type: 'item', id: 'collector_pin' }, { type: 'stat', observation: 1 }] },
     { s: 'system', t: '40 張貼紙的獎勵：「月光雨衣」！', when: { all: [{ minStickers: 40 }, { notFlag: 'sb40' }] }, act: [{ type: 'flag', id: 'sb40' }, { type: 'item', id: 'raincoat' }] },
     { s: 'system', t: '50 張貼紙的獎勵：夥伴們的「月光宴會裝」！', when: { all: [{ minStickers: 50 }, { notFlag: 'sb50' }] }, act: [{ type: 'flag', id: 'sb50' }, { type: 'flag', id: 'party_outfit' }] },
-    { s: 'elder', t: '貼紙……全部集滿了！好，我就說一個關於小白貓的古老故事吧。', when: { all: [{ allStickers: true }, { notFlag: 'sb60' }] }, act: [{ type: 'flag', id: 'sb60' }, { type: 'title', id: '月光觀察家' }] },
+    { s: 'elder', t: '第一章的貼紙……全部集滿了！好，我就說一個關於小白貓的古老故事吧。', when: { all: [{ allChapter1Stickers: true }, { notFlag: 'sb60' }] }, act: [{ type: 'flag', id: 'sb60' }, { type: 'title', id: '月光觀察家' }] },
     { s: 'elder', t: '傳說，每當月亮變暗的時候，就會有一隻白色的小貓，帶著遠方的孩子回到這裡。……也許，那只是傳說。', when: { flag: 'sb60' } },
   ],
   elder_story: [

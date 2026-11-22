@@ -3,21 +3,21 @@ import { ITEMS } from '../data/items';
 export interface MemberState { id: string; lv: number; exp: number; hp: number; mp: number; joined?: boolean; }
 export interface QuestState { status: 'available' | 'active' | 'done'; prog: Record<string, number>; seen: Record<string, string[]>; }
 export interface GameState {
-  version: number; name: string; money: number; courage: number; observation: number;
+  version: number; name: string; money: number; courage: number; kindness: number; observation: number;
   members: Record<string, MemberState>; party: string[]; inventory: Record<string, number>; weapon?: string;
   flags: Record<string, boolean>; quests: Record<string, QuestState>; tracked?: string;
   map: string; x: number; y: number; dir: number; time: 'day' | 'night'; stickers: string[];
-  stats: { talkSuccess: number; won: number; lost: number }; savedAt?: number;
+  stats: { talkSuccess: number; shares: number; won: number; lost: number }; savedAt?: number;
   guest?: string | null; titles?: string[]; chapterDone?: boolean;
   quiz?: { seen: string[]; correct: number; wrong: number }; skills?: Record<string, string[]>; bonds?: Record<string, number>; size?: 'normal' | 'small' | 'big'; acc?: string[]; outfit?: string; lanterns?: string[]; seenEnemies?: string[]; weather?: 'rain' | 'clear'; bondWins?: Record<string, number>; feast?: boolean; day?: number;
 }
 export const SAVE_KEY = 'mcv_save_v1';
 export function newState(): GameState {
   return {
-    version: 1, name: '小葵', money: 0, courage: 1, observation: 1,
+    version: 1, name: '小葵', money: 0, courage: 1, kindness: 0, observation: 1,
     members: { hero: { id: 'hero', lv: 1, exp: 0, hp: MEMBERS.hero.base.hp, mp: MEMBERS.hero.base.mp } },
     party: ['hero'], inventory: {}, flags: {}, quests: {}, map: 'village', x: 336, y: 936, dir: 1, time: 'night', stickers: [],
-    stats: { talkSuccess: 0, won: 0, lost: 0 },
+    stats: { talkSuccess: 0, shares: 0, won: 0, lost: 0 },
   };
 }
 export function memberStats(s: GameState, id: string) {
@@ -44,7 +44,7 @@ export function addExp(s: GameState, n: number): { id: string; lv: number }[] {
 export function healAll(s: GameState) { for (const id of Object.keys(s.members)) { const st = memberStats(s, id); s.members[id].hp = st.maxHp; s.members[id].mp = st.maxMp; } }
 export function saveGame(s: GameState) { s.savedAt = Date.now(); try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); return true; } catch { return false; } }
 export function loadGame(): GameState | null {
-  try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return null; const s = JSON.parse(raw); if (s.version !== 1) return null; return Object.assign(newState(), s); } catch { return null; }
+  try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return null; const s = JSON.parse(raw); if (s.version !== 1) return null; const defaults = newState(); return { ...defaults, ...s, stats: { ...defaults.stats, ...s.stats } }; } catch { return null; }
 }
 export function hasSave() { return !!localStorage.getItem(SAVE_KEY); }
 
