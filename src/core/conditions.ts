@@ -1,7 +1,7 @@
 import type { Cond } from '../data/types';
 import type { GameState } from './state';
 import { QUESTS } from '../data/quests';
-import { bookCount, bookTotal } from '../data/items';
+import { bookCount, bookIds, bookTotal, chapter1Collection } from '../data/items';
 import { bondOf } from './state';
 import { currentObjective } from './quests';
 export function check(s: GameState, c?: Cond): boolean {
@@ -19,6 +19,8 @@ export function check(s: GameState, c?: Cond): boolean {
   if (c.notFlag && s.flags[c.notFlag]) return false;
   if (c.time && s.time !== c.time) return false;
   if (c.minObs != null && s.observation < c.minObs) return false;
+  if (c.map && s.map !== c.map) return false;
+  if (c.minKindness != null && s.kindness < c.minKindness) return false;
   if (c.minCourage != null && s.courage < c.minCourage) return false;
   if (c.inParty && !(s.party.includes(c.inParty) || s.guest === c.inParty)) return false;
   if (c.recruited && !s.members[c.recruited]?.joined) return false;
@@ -29,6 +31,7 @@ export function check(s: GameState, c?: Cond): boolean {
   if (c.minActive != null || c.maxActive != null) { const n = Math.min(3, s.party.length + (s.guest && !s.party.includes(s.guest) ? 1 : 0)); if (c.minActive != null && n < c.minActive) return false; if (c.maxActive != null && n > c.maxActive) return false; }
   if (c.minCompanions != null && Object.values(s.members).filter(m => m.joined).length < c.minCompanions) return false;
   if (c.hasItem && (s.inventory[c.hasItem[0]] ?? 0) < c.hasItem[1]) return false;
+  if (c.allChapter1Stickers && !(chapter1Collection.all ?? bookIds()).every(id => s.stickers.includes(id))) return false;
   if (c.allStickers && bookCount(s.stickers) < bookTotal()) return false;
   if (c.minStickers != null && bookCount(s.stickers) < c.minStickers) return false;
   if (c.hasSticker && !s.stickers.includes(c.hasSticker)) return false;

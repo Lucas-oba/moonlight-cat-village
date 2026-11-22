@@ -11,6 +11,7 @@ import '../src/data/whimsy2';
 ENCOUNTERS.sim_teasnail = { id: 'sim_teasnail', rate: 0.09, minSteps: 5, bg: 'battlebg', groups: ENCOUNTERS.meadow_grass.groups.filter(g => g.enemies.includes('teasnail')).map(g => ({ ...g, when: (g.when as any)?.all?.[0] })) };
 import { ITEMS } from '../src/data/items';
 import '../src/data/ch1c';
+import '../src/data/ch2_systems';
 
 // 試調數值：TUNE='{"ENEMIES":{"slime":{"atk":5}}}'
 function deep(t: any, o: any) { for (const k in o) { if (o[k] && typeof o[k] === 'object' && !Array.isArray(o[k]) && t[k]) deep(t[k], o[k]); else t[k] = o[k]; } }
@@ -84,7 +85,12 @@ export async function batch(su: Setup, n: number) {
   return { max: tl[n - 1], win: win / n, lose: lose / n, timeout: to / n, turns: turns / n, p90: tl[Math.floor(n * 0.9)], hpLeft: hp / n, talk: talk / n, exp: exp / n, cookies: cookies / n };
 }
 // ---- 情境：第一章各地點，與「應有等級」 ----
-const P = { solo: ['hero'], ali: ['hero', 'ali'], mint: ['hero', 'mint'], full: ['hero', 'ali', 'mint'], yuzu: ['hero', 'ali', 'yuzu'], amy: ['hero', 'mint', 'yuzu'] };
+const P = { solo: ['hero'], ali: ['hero', 'ali'], mint: ['hero', 'mint'], full: ['hero', 'ali', 'mint'], yuzu: ['hero', 'ali', 'yuzu'], amy: ['hero', 'mint', 'yuzu'], puddingAli: ['hero', 'pudding', 'ali'], puddingMint: ['hero', 'pudding', 'mint'] };
+const CH2_SCENARIOS = ['mistpuff', 'thornling', 'cryshroom', 'mistwolf', 'yarnweasel'].map(id => {
+  const enc = `sim_${id}`;
+  FIXED[enc] = { id: enc, enemies: [id, id], bg: 'forestbg' };
+  return { name: ENEMIES[id].name + ' ×2', enc, fixed: true, lv: [10, 11, 12], parties: ['full' as const, 'puddingAli' as const, 'puddingMint' as const], courage: 12, cookies: 3 };
+});
 export const SCENARIOS: { name: string; enc: string; fixed: boolean; lv: number[]; parties: (keyof typeof P)[]; courage: number; cookies: number }[] = [
   { name: '草原（主線6後）', enc: 'meadow_grass', fixed: false, lv: [2, 3, 4], parties: ['solo', 'ali', 'mint'], courage: 3, cookies: 2 },
   { name: '咕咕（主線7）', enc: 'gugu', fixed: true, lv: [2, 3, 4], parties: ['solo', 'ali'], courage: 3, cookies: 2 },
@@ -103,16 +109,19 @@ export const SCENARIOS: { name: string; enc: string; fixed: boolean; lv: number[
   { name: '燈籠蝙蝠（支線14）', enc: 'lantern_bat', fixed: true, lv: [6, 7], parties: ['full', 'yuzu'], courage: 6, cookies: 3 },
   { name: '茶杯蝸牛（草原，支線21後）', enc: 'sim_teasnail', fixed: false, lv: [3, 4, 5], parties: ['solo', 'ali', 'mint'], courage: 3, cookies: 2 },
   { name: '顛倒小徑（主線8後）', enc: 'flip_grass', fixed: false, lv: [5, 6, 7], parties: ['ali', 'mint', 'full'], courage: 5, cookies: 3 },
+  ...CH2_SCENARIOS,
   { name: '巨岩（主線11）', enc: 'boss', fixed: true, lv: [5, 6, 7, 8], parties: ['ali', 'mint', 'full', 'yuzu', 'amy'], courage: 7, cookies: 3 },
 ];
 async function main() {
   const N = +(process.argv[2] ?? 1000); const only = process.argv[3];
   const rows: any[] = [];
-  for (const sc of SCENARIOS) {
-    if (only && only !== 'all' && !sc.name.includes(only)) continue;
-    for (const lv of sc.lv) for (const p of sc.parties) for (const pol of ['child', 'smart'] as Policy[]) {
+  const ch2 = only === 'ch2';
+  const policies: Policy[] = ch2 ? ['child'] : ['child', 'smart'];
+  for (const sc of ch2 ? CH2_SCENARIOS : SCENARIOS) {
+    if (!ch2 && only && only !== 'all' && !sc.name.includes(only)) continue;
+    for (const lv of sc.lv) for (const p of sc.parties) for (const pol of policies) {
       const r = await batch({ lv, party: P[p], cookies: sc.cookies, courage: sc.courage, enc: sc.enc, fixed: sc.fixed, policy: pol }, sc.enc === 'boss' ? Math.min(N, 600) : N);
-      rows.push({ 情境: sc.name, lv, 隊伍: p, 玩家: pol, 勝率: (r.win * 100).toFixed(1) + '%', 卡住: (r.timeout * 100).toFixed(1) + '%', 回合: r.turns.toFixed(1), p90回合: r.p90, 剩血: (r.hpLeft * 100).toFixed(0) + '%', 對話結束: (r.talk * 100).toFixed(0) + '%', 餅乾: r.cookies.toFixed(2), EXP: r.exp.toFixed(0), 最多回合: r.max });
+      rows.push({ 情境: sc.name, ...(ch2 ? { 場次: N } : {}), lv, 隊伍: p, 玩家: pol, 勝率: (r.win * 100).toFixed(1) + '%', 卡住: (r.timeout * 100).toFixed(1) + '%', 回合: r.turns.toFixed(ch2 ? 2 : 1), p90回合: r.p90, 剩血: (r.hpLeft * 100).toFixed(ch2 ? 1 : 0) + '%', 對話結束: (r.talk * 100).toFixed(0) + '%', 餅乾: r.cookies.toFixed(2), EXP: r.exp.toFixed(0), 最多回合: r.max });
     }
   }
   console.table(rows);
