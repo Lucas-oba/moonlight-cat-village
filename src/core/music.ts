@@ -2,8 +2,8 @@
 // 用 WebAudio 播放：無縫循環、換場景時淡入淡出；要等玩家第一次點擊後才會開始（手機規定）。
 import { ac, buses, onUnlock, loadBuf } from './sfx';
 
-export type TrackId = 'title' | 'village' | 'field' | 'forest' | 'battle' | 'boss';
-const FILES: Record<TrackId | 'victory', string> = { title: 'bgm_title', village: 'bgm_village', field: 'bgm_field', forest: 'bgm_forest', battle: 'bgm_battle', boss: 'bgm_boss', victory: 'bgm_victory' };
+export type TrackId = 'title' | 'village' | 'field' | 'forest' | 'battle' | 'boss' | 'mist' | 'roots';
+const FILES: Record<TrackId | 'victory', string> = { title: 'bgm_title', village: 'bgm_village', field: 'bgm_field', forest: 'bgm_forest', mist: 'bgm_mist', roots: 'bgm_roots', battle: 'bgm_battle', boss: 'bgm_boss', victory: 'bgm_victory' };
 const LEVEL: Record<string, number> = { title: 0.9, village: 0.85, field: 0.85, battle: 0.8, victory: 0.9 };
 
 let cur: { id: string; src: AudioBufferSourceNode; gain: GainNode } | null = null; let want: TrackId | null = null; let token = 0;

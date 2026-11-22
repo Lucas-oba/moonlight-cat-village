@@ -25,7 +25,7 @@ export function startQuest(s: GameState, id: string) {
   qs.status = 'active';
   const def = QUESTS[id];
   if (def.kind === 'main' || !s.tracked || s.quests[s.tracked]?.status !== 'active') s.tracked = id;
-  if (def.id !== 'main1') bus.emit('toast', { kind: 'quest', title: `${def.kind === 'main' ? '主線' : '支線'}任務開始`, text: def.title });
+  if (def.id !== 'main1') bus.emit('toast', { kind: 'quest', title: `${def.kind === 'main' ? '主線' : '支線'}任務開始`, text: def.chapter === 2 ? `第二章・${def.title}` : def.title });
   bus.emit('questsChanged');
 }
 // 物件類事件：talk / reach / inspect / defeat / resolve / collect

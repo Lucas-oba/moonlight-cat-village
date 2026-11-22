@@ -32,7 +32,7 @@ class GameController {
     bus.on('questComplete', ({ def, lines }) => {
       this.enqueue(async () => {
         sfx.reward();
-        await this.ui.reward(`${def.kind === 'main' ? '主線' : '支線'} ${def.no}「${def.title}」完成喵！`, lines);
+        await this.ui.reward(`${def.chapter === 2 ? '第二章・' : ''}${def.kind === 'main' ? '主線' : '支線'} ${def.no}「${def.title}」完成喵！`, lines);
         if (def.onComplete) await this.run(def.onComplete);
       });
     });
@@ -139,7 +139,7 @@ class GameController {
         else this.ui.toast({ title: '魚乾幣不夠', text: `需要 ${a.price} 魚乾幣` });
         break;
       case 'flag': s.flags[a.id] = a.value ?? true; break;
-      case 'stat': if (a.courage) s.courage = Math.max(0, s.courage + a.courage); if (a.observation) s.observation += a.observation; break;
+      case 'stat': if (a.courage) s.courage = Math.max(0, s.courage + a.courage); if (a.observation) s.observation += a.observation; if (a.kindness) this.addKindness(a.kindness); break;
       case 'exp': addExp(s, a.n).forEach(u => bus.emit('levelUp', u)); break;
       case 'sticker': if (!s.stickers.includes(a.id)) { s.stickers.push(a.id); this.ui.toast({ title: '新貼紙', text: STICKERS[a.id] ?? a.id }); } break;
       case 'systemActivate':
@@ -193,6 +193,8 @@ class GameController {
       case 'wait': await new Promise(r => setTimeout(r, a.ms)); break;
       case 'fog': this.world?.fogBurst?.(a.x, a.y, a.n ?? 8); break;
       case 'shake': this.world?.cameras?.main?.shake(a.ms ?? 500, 0.01); break;
+      case 'stage': this.world?.stage(a.playerLift, a.at); break;
+      case 'walkOff': await this.world?.walkOff(a.npc, a.x, a.y, a.ms); break;
       case 'dim': this.world?.moonDim?.(); break;
       case 'sfx': (sfx as any)[a.id]?.(); break;
     }
@@ -210,6 +212,17 @@ class GameController {
       }
     } finally { this.autoBusy = false; }
   }
+  addKindness(n: number) {
+    if (!Number.isFinite(n) || n <= 0) return;
+    const first = this.s.kindness === 0 && !this.s.flags.kindness_explained;
+    this.s.flags.kindness_explained = true;
+    this.s.kindness += n;
+    this.ui.toast({
+      title: `💗 善良值 +${n}`,
+      text: first ? '做溫柔的事，善良值就會變多喵！善良值越高，魔物越願意聽妳說話。' : '',
+    });
+    this.ui.refresh();
+  }
   ensureMember(id: string) {
     const s = this.s; if (s.members[id]) return;
     const lv = Math.max(1, s.members.hero.lv - 1); s.members[id] = { id, lv, exp: 0, hp: 1, mp: 1 };
@@ -220,7 +233,7 @@ class GameController {
     const ok = saveGame(this.s);
     this.ui.toast({ title: ok ? '存檔完成' : '存檔失敗', text: ok ? '冒險紀錄已經記住了喵！' : '瀏覽器不允許存檔' });
   }
-  questTitle(id: string) { const q = QUESTS[id]; return `${q.kind === 'main' ? '主線' : '支線'} ${q.no}：${q.title}`; }
+  questTitle(id: string) { const q = QUESTS[id]; return `${q.chapter === 2 ? '第二章・' : ''}${q.kind === 'main' ? '主線' : '支線'} ${q.no}：${q.title}`; }
   check = (c: any) => check(this.s, c);
 }
 export const G = new GameController();
