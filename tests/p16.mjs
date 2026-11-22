@@ -1,0 +1,12 @@
+import { launch, sleep, shot } from './lib.mjs';
+const { browser, page, errors } = await launch('http://localhost:4173/?debug=1&skip=1');
+await sleep(2500);
+await page.evaluate(() => { const G = window.__mcv.G; const s = G.s; for (const q of ['main1','main2','main3','main4','main5']) s.quests[q] = { status: 'done', prog: {}, seen: {} };
+  Object.assign(s.flags, { system: true, catSpeech: true, tut_status: true, tut_quests: true, seen_arrive: true }); s.inventory.sticker_book = 1; s.stickers = ['rain_day', 'bell_view', 'meadow_day', 'slime_talk']; G.load(s); });
+await sleep(1200);
+await page.evaluate(() => { window.__mcv.G.ui.openPanel('stickers'); }); await sleep(800);
+console.log(await page.textContent('.sb-head'));
+await page.click('.sub-tabs button:has-text("風景頁")'); await sleep(400);
+console.log(await page.$$eval('.sub-tabs button', b => b.map(x => x.textContent)));
+await shot(page, 'd2_05_sticker_book');
+console.log('errors', errors); await browser.close();
