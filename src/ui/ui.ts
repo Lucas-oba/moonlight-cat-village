@@ -1,6 +1,7 @@
+import { chapterOf, HERO_TITLES, heroTier, heroTitle, TITLE_GIFTS } from '../core/hearts';
 import { G, type UIHooks } from '../core/game';
-import { memberStats, hasSave, loadGame, bondOf } from '../core/state';
-import { expToNext, MEMBERS } from '../data/characters';
+import { memberStats, hasSave, loadGame, bondOf, equipBetterWeapon } from '../core/state';
+import { expToNext, MAX_BOND, MEMBERS } from '../data/characters';
 import { QUESTS } from '../data/quests';
 import { ITEMS, STICKERS } from '../data/items';
 import { currentObjective } from '../core/quests';
@@ -9,7 +10,8 @@ import { music } from '../core/music';
 import { NPCS } from '../data/npcs';
 import { objDone } from '../core/conditions';
 
-export const A = (k: string) => { const f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'mistbg', 'title'].includes(k) ? 'jpg' : 'png'}`; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
+declare const __FINALE_FALLBACKS__: Record<string, string>;
+export const A = (k: string) => { let f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'mistbg', 'echobg', 'denbg', 'c2_ending', 'title'].includes(k) ? 'jpg' : 'png'}`; f = __FINALE_FALLBACKS__[f] ?? f; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
 import { quizPanel } from './quiz';
 import { STICKER_PAGES, bookCount, bookTotal, bookPages, chapter1Collection } from '../data/items';
 import { ENEMIES } from '../data/enemies';
@@ -57,7 +59,7 @@ export class Hud {
   showMapName(n: string) { this.mapName.textContent = n; this.mapName.classList.add('show'); setTimeout(() => this.mapName.classList.remove('show'), 1600); }
   refresh() {
     const s = G.s; const st = memberStats(s, 'hero'); const m = s.members.hero;
-    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div><div class="hud-values"><span>🦁 勇氣值 ${s.courage}</span><span>💗 善良值 ${s.kindness}</span></div>`;
+    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}・${heroTitle(s.courage)}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div><div class="hud-values"><span>🦁 勇氣值 ${s.courage}</span><span>💗 善良值 ${s.kindness}</span></div>`;
     this.money.innerHTML = `🐟 ${s.money}`;
     this.sysBtn.classList.toggle('hidden', !s.flags.system);
     const q = s.tracked && s.quests[s.tracked]?.status === 'active' ? s.tracked : undefined;
@@ -75,9 +77,11 @@ export class Hud {
 export class DialogueBox {
   wrap = el('div', 'dlg hidden'); box = el('div', 'dlg-box'); nameEl = el('div', 'dlg-name'); textEl = el('div', 'dlg-text'); next = el('div', 'dlg-next', '▼'); pic = el('img', 'dlg-portrait') as HTMLImageElement; ch = el('div', 'choices');
   constructor() { this.wrap.append(this.pic, this.box); this.box.append(this.nameEl, this.textEl, this.ch, this.next); root().appendChild(this.wrap); }
-  show(o: { name?: string; text: string; kind: string; portrait?: string; portraitH?: number; think?: boolean; choices?: string[] }): Promise<number> {
+  show(o: { name?: string; text: string; kind: string; portrait?: string; portraitH?: number; think?: boolean; flashBow?: boolean; glitch?: boolean; choices?: { label: string; brave?: true; locked?: boolean }[] }): Promise<number> {
     return new Promise(res => {
       this.wrap.className = 'dlg ' + (o.kind === 'system' ? 'sys' : o.kind === 'narr' ? 'narr' : '');
+      this.wrap.classList.toggle('bow-flash', !!o.flashBow);
+      this.wrap.classList.toggle('signal-glitch', !!o.glitch);
       this.nameEl.textContent = o.name ?? ''; this.nameEl.style.display = o.name ? '' : 'none';
       if (o.portrait) { this.pic.src = A(o.portrait); this.pic.style.display = ''; this.pic.className = 'dlg-portrait' + (o.kind === 'hero' ? ' left' : ''); this.pic.style.height = o.portraitH ? o.portraitH + 'px' : o.portrait.startsWith('slime') ? '90px' : o.portrait.startsWith('whitecat') || o.portrait.startsWith('douhua') ? '110px' : '150px'; }
       else this.pic.style.display = 'none';
@@ -87,7 +91,12 @@ export class DialogueBox {
       const finish = () => {
         done = true; this.textEl.textContent = full;
         if (o.choices?.length) {
-          o.choices.forEach((c, k) => { const b = el('button', '', c, this.ch); b.onclick = (e) => { e.stopPropagation(); sfx.ok(); cleanup(); res(k); }; });
+          o.choices.forEach((c, k) => { const b = el('button', c.locked ? 'brave locked' : c.brave ? 'brave' : '', (c.brave ? '🦁 ' : '') + c.label, this.ch);
+            b.onclick = (e) => {
+              e.stopPropagation();
+              if (c.locked) { this.textEl.textContent = '🦁 ' + c.label; return; }
+              sfx.ok(); cleanup(); res(k);
+            }; });
         } else this.next.style.display = '';
       };
       const timer = setInterval(() => { if (done) return; i += 2; this.textEl.textContent = full.slice(0, i); if (i >= full.length) { clearInterval(timer); finish(); } }, 28);
@@ -103,12 +112,14 @@ export class DialogueBox {
 
 // ---------- 喵喵勇者系統面板 ----------
 export function openSystemPanel(tab = 'status'): Promise<void> {
+  let journalChapter = tab === 'journal1' ? 1 : tab === 'journal2' ? 2 : chapterOf(G.s);
+  if (tab.startsWith('journal')) tab = 'journal';
   return new Promise(res => {
     const wrap = el('div', 'sys-wrap', '', root()); const p = el('div', 'sys-panel', '', wrap);
     const head = el('div', 'sys-head', '🐾 喵喵勇者系統', p); const x = el('button', 'x', '✕', head);
     const tabs = el('div', 'sys-tabs', '', p); const body = el('div', 'sys-body', '', p);
     const hasParty = Object.values(G.s.members).some(m => m.joined) || !!G.s.guest;
-    const names: [string, string][] = [['status', '屬性'], ...(hasParty || tab === 'party' ? [['party', '隊伍'] as [string, string]] : []), ['quests', '任務'], ['items', '道具'], ...(G.s.inventory.sticker_book ? [['stickers', '貼紙'] as [string, string]] : []), ['settings', '設定']];
+    const names: [string, string][] = [['status', '屬性'], ...(hasParty || tab === 'party' ? [['party', '隊伍'] as [string, string]] : []), ['quests', '任務'], ['items', '道具'], ...(G.s.inventory.sticker_book ? [['stickers', '貼紙'] as [string, string]] : []), ['journal', '勇士日記'], ['settings', '設定']];
     let qtab: 'main' | 'side' = 'main'; let spage = 0;
     const tutorial = tab === 'status' && !G.s.flags.tut_status ? 'status' : tab === 'quests' && !G.s.flags.tut_quests ? 'quests' : '';
     const render = (t: string) => {
@@ -117,7 +128,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
       const s = G.s; const st = memberStats(s, 'hero'); const m = s.members.hero;
       if (t === 'status') {
         body.innerHTML = `${tutorial === 'status' ? '<div class="tut">喵！這是妳的屬性頁。<br>・<b>勇氣值</b>越高，「對話」越容易讓魔物離開。<br>・<b>觀察力</b>越高，地圖上能看到越多「閃光點」。<br>兩個屬性都靠完成任務和事件提升喵！</div>' : ''}
-        <div class="who"><img src="${A('hero_big')}"><div><div style="font-size:20px">${s.name}</div><div>Lv ${m.lv}・初級戰士</div><div style="font-size:13px">EXP ${m.exp} / ${expToNext(m.lv)}</div>
+        <div class="who"><img src="${A('hero_big')}"><div><div style="font-size:20px">${s.name}</div><div>Lv ${m.lv}・${heroTitle(s.courage)}</div><div style="font-size:13px">EXP ${m.exp} / ${expToNext(m.lv)}</div>
         <div><span class="tagline">能力：聽懂貓語</span></div></div></div>
         <div class="stat-grid">
         <div class="stat"><span>HP</span><b>${m.hp} / ${st.maxHp}</b></div><div class="stat"><span>MP</span><b>${m.mp} / ${st.maxMp}</b></div>
@@ -125,7 +136,9 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         <div class="stat"><span>速度</span><b>${st.spd}</b></div><div class="stat"><span>魚乾幣</span><b>${s.money}</b></div>
         <div class="stat hl"><span>🦁 勇氣值</span><b>${s.courage}</b></div><div class="stat hl"><span>💗 善良值</span><b>${s.kindness}</b></div><div class="stat hl"><span>🔍 觀察力</span><b>${s.observation}</b></div>
         </div>
-        <div style="margin-top:10px">技能：<span class="tagline">勇氣揮擊（MP 3）</span></div>
+        <small>稱號越高，魔物越願意聽妳說話</small><br>
+        <small>${s.observation >= 5 ? '看得到魔物的心情和弱點' : s.observation >= 3 ? '看得到魔物的心情' : '在地圖上找閃光點'}${s.observation >= 4 ? '。答錯時有額外提示' : ''}</small>
+        <div style="margin-top:10px">技能：${MEMBERS.hero.skills.filter(k => !k.quest || s.skills?.hero?.includes(k.id)).map(k => `<span class="tagline">${k.name}（MP ${k.mp}）</span>`).join('')}</div>
         <div>裝備：<span class="tagline">${s.weapon ? ITEMS[s.weapon].name : '（無）'}</span></div>
         ${s.titles?.length ? `<div>稱號：${s.titles.map(t => `<span class="tagline">${t}</span>`).join('')}</div>` : ''}
         <div>隊伍：${[0, 1, 2].map(i => s.party[i] ? `<span class="tagline">${G.memberName(s.party[i])}</span>` : '<span class="tagline" style="opacity:.6">空位</span>').join('')}（最多 3 人上場）</div>
@@ -150,9 +163,9 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         for (const [k, v] of list) {
           const d = QUESTS[k]; const done = v.status === 'done';
           const it = el('div', 'q-item' + (s.tracked === k ? ' tracked' : '') + (done ? ' done-q' : ''), '', body);
-          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${d.chapter === 2 ? '第二章・' : ''}${d.no}. ${d.title}`, it);
+          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${d.chapter === 2 ? '第二章・' : ''}${d.no}. ${d.title}${d.bond ? ' <span class="tagline">羈絆</span>' : ''}`, it);
           if (!done) { const tb = el('button', 'trk', s.tracked === k ? '追蹤中' : '追蹤', h); tb.onclick = () => { s.tracked = k; sfx.ok(); G.ui.refresh(); render('quests'); }; }
-          el('p', '', d.summary + (d.giver ? `（請妳幫忙的是：${NPCS.find(n => n.id === d.giver)?.name ?? d.giver}）` : ''), it);
+          el('p', '', d.summary + (d.autoStartAfter && s.quests[d.autoStartAfter]?.status === 'done' ? '（主線需要）' : '') + (d.giver ? `（請妳幫忙的是：${NPCS.find(n => n.id === d.giver)?.name ?? d.giver}）` : ''), it);
           const ul = el('ul', '', '', it); const cur = currentObjective(s, k);
           d.objectives.forEach(o => { const od = objDone(s, k, o.id); if (d.ordered && !od && cur && o.id !== cur.id) return; el('li', od ? 'done' : '', `${od ? '☑' : '☐'} ${o.text}${o.count && o.count > 1 ? `（${v.prog[o.id] ?? 0}/${o.count}）` : ''}`, ul); });
         }
@@ -163,7 +176,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         if (s.guest && !ids.includes(s.guest)) ids.push(s.guest);
         for (const id of ids) {
           const mm = s.members[id]; const d = MEMBERS[id]; const ms = memberStats(s, id); const on = s.party.includes(id); const guest = s.guest === id;
-          const row = el('div', 'mem-row' + (on || guest ? ' on' : ''), `<img src="${A(d.icon)}"><div class="mi"><b>${G.memberName(id)}</b> Lv${mm.lv}${guest ? ' <span class="tagline">同行中</span>' : ''}${id !== 'hero' && mm.joined ? ` <span class="bond" title="羈絆">${'❤'.repeat(bondOf(s, id))}${'♡'.repeat(3 - bondOf(s, id))}</span>` : ''}<small>${d.role}</small><small>HP ${mm.hp}/${ms.maxHp}・MP ${mm.mp}/${ms.maxMp}・攻 ${ms.atk}・防 ${ms.def}・速 ${ms.spd}</small><small>技能：${d.skills.filter(k => mm.lv >= k.learnLv).map(k => `${k.name}（${k.desc}）`).join('、')}</small></div>`, body);
+          const row = el('div', 'mem-row' + (on || guest ? ' on' : ''), `<img src="${A(d.icon)}"><div class="mi"><b>${G.memberName(id)}</b> Lv${mm.lv}${guest ? ' <span class="tagline">同行中</span>' : ''}${id !== 'hero' && mm.joined ? ` <span class="bond" title="羈絆">${'❤'.repeat(bondOf(s, id))}${'♡'.repeat(Math.max(0, MAX_BOND - bondOf(s, id)))}</span>` : ''}<small>${id === 'hero' ? heroTitle(s.courage) : d.role}</small><small>HP ${mm.hp}/${ms.maxHp}・MP ${mm.mp}/${ms.maxMp}・攻 ${ms.atk}・防 ${ms.def}・速 ${ms.spd}</small><small>技能：${d.skills.filter(k => mm.lv >= k.learnLv && (!k.quest || s.skills?.[id]?.includes(k.id))).map(k => `${k.name}（${k.desc}）`).join('、')}</small></div>`, body);
           const btns = el('div', 'mb', '', row);
           if (id !== 'hero' && !guest) {
             const b = el('button', on ? 'on' : '', on ? '上場中' : '休息中', btns);
@@ -171,12 +184,36 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
             if (on && s.party.indexOf(id) > 1) { const u = el('button', '', '↑', btns); u.onclick = () => { const i = s.party.indexOf(id); [s.party[i - 1], s.party[i]] = [s.party[i], s.party[i - 1]]; sfx.blip(); G.world?.refreshWorld?.(); render('party'); }; }
           } else el('span', 'lead', id === 'hero' ? '隊長' : '暫時同行', btns);
         }
+      } else if (t === 'journal') {
+        body.innerHTML = '';
+        const nav = el('div', 'sub-tabs', '', body);
+        for (const n of [1, 2]) {
+          if (n === 2 && !s.quests.c2m1) continue;
+          const b = el('button', n === journalChapter ? 'on' : '', n === 1 ? '第一章' : '第二章', nav);
+          b.onclick = () => { journalChapter = n; render('journal'); };
+        }
+        const j = s.journal[journalChapter];
+        const lines: [number, string, string][] = [
+          [j.brave, `這一章，${s.name}鼓起勇氣 ${j.brave} 次 🦁`, '妳害怕的時候，還是往前走了。'],
+          [j.secrets, `發現了 ${j.secrets} 個祕密 🔍`, '妳看見了小小的線索。真細心！'],
+          [j.helps, `幫助了 ${j.helps} 次 💗`, '妳讓大家的心暖暖的。'],
+          [j.friends, `和魔物交了 ${j.friends} 次朋友`, '謝謝妳願意聽魔物說話。'],
+        ];
+        const praise = lines.reduce((best, line) => line[0] > best[0] ? line : best);
+        el('div', 'journal-page', `${badge(heroTier(s.courage))}<h3>${heroTitle(s.courage)}</h3>
+          <p>🦁 ${s.courage}　🔍 ${s.observation}　💗 ${s.kindness}</p>
+          ${lines.filter(([n]) => n).map(([, line]) => `<p>${line}</p>`).join('')}
+          <p>${praise[0] ? praise[2] : '今天也踏出了一小步。'}</p>`, body);
       } else if (t === 'stickers') {
         body.innerHTML = `<div class="sb-head">📒 喵喵貼紙簿：<b>${bookCount(s.stickers)}</b> / ${bookTotal()} 張</div>`;
         const sub = el('div', 'sub-tabs', '', body);
-        const PAGES = bookPages(); if (spage >= PAGES.length) spage = 0;
-        PAGES.forEach((pg, k) => { const n = pg.ids.filter(i => s.stickers.includes(i)).length; const b = el('button', k === spage ? 'on' : '', `${pg.name}<small> ${n}/${pg.ids.length}</small>`, sub); b.onclick = () => { spage = k; sfx.blip(); render('stickers'); }; });
+        const PAGES = [...bookPages(), { id: 'forest_friends', name: '森林朋友', ids: Object.keys(s.befriended).filter(id => ENEMIES[id]) }]; if (spage >= PAGES.length) spage = 0;
+        PAGES.forEach((pg, k) => { const n = pg.ids.filter(i => s.stickers.includes(i)).length; const b = el('button', k === spage ? 'on' : '', `${pg.name}${pg.id === 'forest_friends' ? '' : `<small> ${n}/${pg.ids.length}</small>`}`, sub); b.onclick = () => { spage = k; sfx.blip(); render('stickers'); }; });
         const grid = el('div', 'sb-grid', '', body); const pg = PAGES[spage];
+        if (pg.id === 'forest_friends') {
+          pg.ids.forEach(id => el('div', 'sb-st have', `<img src="${A(ENEMIES[id].sprite)}" alt=""><small>${ENEMIES[id].name} ×${s.befriended[id]}</small>`, grid));
+          return;
+        }
         pg.ids.forEach((i, k) => { const ic = STICKER_ICON[pg.id] ?? ['⭐']; const have = s.stickers.includes(i); el('div', 'sb-st' + (have ? ' have ' + pg.id : ''), have ? `<span>${ic[k % ic.length]}</span><small>${STICKERS[i]}</small>` : '<span>？</span><small>還沒拿到</small>', grid); });
         el('div', 'sb-tip', '集滿 10、20、30、40、50 張，或是集滿第一章的貼紙，可以去長老家領獎勵喵！貼紙會越來越多喔。', body);
         if (pg.id === 'monster' && (chapter1Collection.monsters ?? STICKER_PAGES.find(c => c.id === 'monster')?.ids ?? []).every(i => s.stickers.includes(i))) { const b = el('button', 'qz-next', '📖 打開魔物圖鑑', body); b.onclick = () => { sfx.blip(); bestiary(body); }; }
@@ -229,7 +266,7 @@ export function activateSystem(): Promise<void> {
     const w = el('div', 'activate', '<div class="ring">🐱</div><div class="lines"></div>', root());
     fl.classList.remove('on'); setTimeout(() => fl.remove(), 700);
     sfx.chime(); const L = w.querySelector('.lines')!;
-    const lines = ['叮！', '喵喵勇者系統，啟動喵！', '獲得能力：聽懂貓語', '獲得職業：初級戰士'];
+    const lines = ['叮！', '喵喵勇者系統，啟動喵！', '獲得能力：聽懂貓語', '獲得職業：初期勇士'];
     for (const t of lines) { await wait(650); el('div', '', t, L as HTMLElement); sfx.meow(); }
     await wait(500); el('div', 'tap', '點一下繼續', w);
     w.addEventListener('pointerdown', () => { w.remove(); res(); }, { once: true });
@@ -242,10 +279,15 @@ export function toast(t: { title: string; text: string }) {
   const e = el('div', 'toast', `<b>${t.title}</b>${t.text}`, toastBox());
   setTimeout(() => e.classList.add('out'), 2400); setTimeout(() => e.remove(), 2900);
 }
-export function reward(title: string, lines: string[]): Promise<void> {
+declare const __HERO_BADGES__: boolean[];
+function badge(tier: number) {
+  const asset = __HERO_BADGES__[tier] ? `badge_t${tier}` : 'hero_big';
+  return `<img class="hero-badge" src="${A(asset)}" alt="">`;
+}
+export function reward(title: string, lines: string[], tier?: number): Promise<void> {
   return new Promise(res => {
-    const w = el('div', 'reward', '', root());
-    const c = el('div', 'card', `<div style="font-size:30px">🐾</div><h3>${title}</h3><div class="r-list">${lines.length ? lines.map(l => `✨ ${l}`).join('<br>') : ''}</div>`, w);
+    const w = el('div', tier == null ? 'reward' : 'reward title-up', '', root());
+    const c = el('div', 'card', `${tier == null ? '<div style="font-size:30px">🐾</div>' : badge(tier)}<h3>${title}</h3><div class="r-list">${lines.length ? lines.map(l => `✨ ${l}`).join('<br>') : ''}</div>`, w);
     const b = el('button', '', '好！', c); b.onclick = () => { sfx.ok(); w.remove(); res(); };
   });
 }
@@ -254,7 +296,9 @@ export function fade(text = '', white = false): Promise<void> { fadeEl?.remove()
 export function unfade(): Promise<void> { const f = fadeEl; if (!f) return Promise.resolve(); f.classList.remove('on'); fadeEl = null; return wait(650).then(() => f.remove()); }
 
 export function makeHooks(hud: Hud, dlg: DialogueBox): UIHooks {
-  return { dialogue: dlg, activateSystem, openPanel: openSystemPanel, reward, fade, unfade, toast, refresh: () => hud.refresh(), shop: shopPanel, chapterEnd: chapterEndScreen, quiz: quizPanel, travel: travelPanel, stickerBoard: async () => {}, trade: tradePanel };
+  return { celebrate: (tier) => reward(`叮！${G.s.name}變成『${HERO_TITLES[tier]}』了喵！`, [
+    TITLE_GIFTS[tier], `新貼紙：${HERO_TITLES[tier]}`, '妳害怕的時候，還是往前走了。',
+  ], tier), dialogue: dlg, activateSystem, openPanel: openSystemPanel, reward, fade, unfade, toast, refresh: () => hud.refresh(), shop: shopPanel, chapterEnd: chapterEndScreen, quiz: quizPanel, travel: travelPanel, stickerBoard: async () => {}, trade: tradePanel };
 }
 
 // ---------- 商店（例如銀杏婆婆的草藥店） ----------
@@ -268,7 +312,15 @@ export function shopPanel(items: { id: string; price: number }[], title = '🌿 
       for (const it of items) {
         const d = ITEMS[it.id]; const row = el('div', 'inv-row', `<div><b>${d.name}</b> <span class="price">${it.price} 魚乾幣</span><small>${d.desc}（有 ${G.s.inventory[it.id] ?? 0} 個）</small></div>`, body);
         const b = el('button', '', '買', row) as HTMLButtonElement; b.disabled = G.s.money < it.price;
-        b.onclick = () => { if (G.s.money < it.price) return; G.s.money -= it.price; G.s.inventory[it.id] = (G.s.inventory[it.id] ?? 0) + 1; sfx.ok(); toast({ title: '買到了', text: d.name }); draw(); };
+        b.onclick = () => {
+          if (G.s.money < it.price) return;
+          G.s.money -= it.price;
+          G.s.inventory[it.id] = (G.s.inventory[it.id] ?? 0) + 1;
+          const equip = equipBetterWeapon(G.s, d.id);
+          sfx.ok();
+          toast({ title: '買到了', text: equip ? `已裝備${d.name}` : d.name });
+          draw();
+        };
       }
     };
     draw();
@@ -278,7 +330,27 @@ export function shopPanel(items: { id: string; price: number }[], title = '🌿 
 }
 
 // ---------- 第一章完成 ----------
-export function chapterEndScreen(): Promise<void> {
+export function chapterEndScreen(chapter?: 2): Promise<void> {
+  if (chapter === 2) {
+    const s = G.s;
+    const sides = Object.values(QUESTS).filter(q => q.chapter === 2 && q.kind === 'side');
+    const ch1Monsters = new Set(chapter1Collection.monsters);
+    const sideStickers = new Set(sides.map(q => q.rewards.sticker));
+    const stickers = STICKER_PAGES.flatMap(page =>
+      page.id === 'forest_depths' ? page.ids : page.id === 'monster' ? page.ids.filter(id => !ch1Monsters.has(id))
+        : page.id === 'wonder' ? page.ids.filter(id => sideStickers.has(id)) : []);
+    const screen = el('div', 'chap-end chapter-two on', '', root());
+    screen.style.backgroundImage = `url(${A('c2_ending')})`;
+    const card = el('div', 'ce-card', `<h2>第二章　森林深處　完成喵！</h2>
+      <div class="ce-stats">
+        <div><span>完成的支線</span><b>${sides.filter(q => s.quests[q.id]?.status === 'done').length} / ${sides.length}</b></div>
+        <div><span>喵喵貼紙</span><b>${stickers.filter(id => s.stickers.includes(id)).length} / ${stickers.length}</b></div>
+      </div><div class="ce-next"><div>下一章</div><h1>第三章（製作中）</h1></div>`, screen);
+    sfx.chime();
+    return new Promise(resolve => {
+      el('button', 'big-btn', '繼續冒險', card).onclick = () => { sfx.ok(); screen.remove(); resolve(); };
+    });
+  }
   return new Promise(async res => {
     const s = G.s; const sides = Object.entries(s.quests).filter(([k, v]) => QUESTS[k].kind === 'side' && v.status === 'done').length;
     const w = el('div', 'chap-end', '', root());
@@ -301,11 +373,11 @@ export function titleScreen(): Promise<'new' | 'continue'> {
     const sc = el('div', 'screen', '', root()); sc.style.backgroundImage = `url(${A('title')})`;
     el('div', 'title-logo', '<h1>月光貓村</h1><p>第一章　月光下的小勇者</p>', sc);
     const m = el('div', 'title-menu', '', sc);
-    const save = hasSave() ? loadGame() : null;
+    const save = hasSave() ? loadGame()?.state : null;
     if (save) { const c = el('button', 'big-btn', `繼續遊戲<div style="font-size:13px">${save.name}・Lv ${save.members.hero.lv}</div>`, m); c.onclick = () => { sfx.unlock(); sfx.ok(); sc.remove(); res('continue'); }; }
     const n = el('button', 'big-btn' + (save ? ' alt' : ''), '新遊戲', m);
     n.onclick = () => { sfx.unlock(); sfx.ok(); if (save && !confirm('開始新遊戲會覆蓋原本的存檔（存檔時）。確定嗎？')) return; sc.remove(); res('new'); };
-    el('div', 'version', '試玩版 0.9.0', sc);
+    el('div', 'version', '試玩版 0.10.0', sc);
     const sb = el('button', 'title-snd', settings.music || settings.sfx ? '🔊' : '🔇', sc);
     sb.onclick = (e) => { e.stopPropagation(); const on = !(settings.music || settings.sfx); settings.music = on; settings.sfx = on; saveSettings(); sb.textContent = on ? '🔊' : '🔇'; if (on) sfx.ok(); };
     music.play('title');

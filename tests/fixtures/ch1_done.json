@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "name": "小葵",
+  "money": 634,
+  "courage": 15,
+  "kindness": 0,
+  "observation": 5,
+  "members": {
+    "hero": {
+      "id": "hero",
+      "lv": 9,
+      "exp": 139,
+      "hp": 90,
+      "mp": 24
+    },
+    "mint": {
+      "id": "mint",
+      "lv": 9,
+      "exp": 45,
+      "hp": 66,
+      "mp": 38,
+      "joined": true
+    }
+  },
+  "party": [
+    "hero",
+    "mint"
+  ],
+  "inventory": {
+    "wooden_sword": 1,
+    "sticker_book": 1,
+    "cookie": 2,
+    "jelly": 2,
+    "moon_flower": 2,
+    "goblin_drawing": 1,
+    "forest_mushroom": 2,
+    "rock_tooth": 1,
+    "sweet_potato": 2,
+    "herb_candy": 2
+  },
+  "flags": {
+    "seen_arrive": true,
+    "system": true,
+    "catSpeech": true,
+    "tut_status": true,
+    "tut_quests": true,
+    "gift_t_yuzu": false,
+    "gift_t_mint": false,
+    "gift_t_ali": false,
+    "clue_farmer": true,
+    "clue_merchant": true,
+    "clue_innkeeper": true,
+    "seen_meadow": true,
+    "fp1": true,
+    "fp2": true,
+    "fp3": true,
+    "seen_s5_tree": true,
+    "herb_shop": true,
+    "gugu_talked": true,
+    "seen_m7_goblin": true,
+    "tut_party": true,
+    "forest_open": true,
+    "seen_m8_gate": true,
+    "seen_m9_enter": true,
+    "seen_m9_cry": true,
+    "seen_m10_camp": true,
+    "choiceA": true,
+    "boss_talked": true,
+    "seen_m11_boss": true,
+    "seen_m12_feast": true,
+    "seen_m12_chase": true
+  },
+  "quests": {
+    "main1": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main2": {
+      "status": "done",
+      "prog": {
+        "plaza": 1,
+        "talk3": 3,
+        "elder": 1
+      },
+      "seen": {
+        "talk3": [
+          "merchant",
+          "innkeeper",
+          "farmer"
+        ]
+      }
+    },
+    "main3": {
+      "status": "done",
+      "prog": {
+        "guard": 1,
+        "system": 1
+      },
+      "seen": {}
+    },
+    "main4": {
+      "status": "done",
+      "prog": {
+        "story": 1,
+        "log": 1
+      },
+      "seen": {}
+    },
+    "main5": {
+      "status": "done",
+      "prog": {
+        "shop": 1,
+        "inn": 1,
+        "farm": 1,
+        "paw": 1
+      },
+      "seen": {}
+    },
+    "main6": {
+      "status": "done",
+      "prog": {
+        "farmer": 1,
+        "garden": 1,
+        "guard": 1,
+        "tutorial": 3,
+        "prints": 3
+      },
+      "seen": {
+        "prints": [
+          "fp1",
+          "fp2",
+          "fp3"
+        ]
+      }
+    },
+    "side2": {
+      "status": "active",
+      "prog": {
+        "ask": 3,
+        "find": 1
+      },
+      "seen": {}
+    },
+    "side4": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side9": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side16": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side21": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main7": {
+      "status": "done",
+      "prog": {
+        "find": 1,
+        "guard": 1
+      },
+      "seen": {}
+    },
+    "side1": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side5": {
+      "status": "done",
+      "prog": {
+        "tree": 1,
+        "home": 1
+      },
+      "seen": {}
+    },
+    "side6": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side17": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side18": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main8": {
+      "status": "done",
+      "prog": {
+        "elder": 1,
+        "guard": 1,
+        "friend": 1,
+        "gate": 1
+      },
+      "seen": {}
+    },
+    "side3": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side7": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main9": {
+      "status": "done",
+      "prog": {
+        "enter": 1,
+        "cry": 1
+      },
+      "seen": {}
+    },
+    "side14": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side19": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main10": {
+      "status": "done",
+      "prog": {
+        "camp": 1,
+        "talk3": 3,
+        "chief": 1
+      },
+      "seen": {
+        "talk3": [
+          "gob1",
+          "gob2",
+          "gob3"
+        ]
+      }
+    },
+    "side10": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main11": {
+      "status": "done",
+      "prog": {
+        "boss": 1
+      },
+      "seen": {}
+    },
+    "side12": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side15": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side20": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main12": {
+      "status": "done",
+      "prog": {
+        "feast": 1,
+        "elder": 1,
+        "whitecat": 1,
+        "chase": 1
+      },
+      "seen": {}
+    },
+    "c2m1": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    }
+  },
+  "map": "meadow",
+  "x": 400,
+  "y": 592,
+  "dir": 0,
+  "time": "night",
+  "stickers": [
+    "moon_paw",
+    "slime_defeat",
+    "slime_talk",
+    "mint_join",
+    "goblin_talk",
+    "goblin_drawing",
+    "wolf_defeat",
+    "sprout_saved",
+    "rock_talk",
+    "rock_friend",
+    "moon_feast"
+  ],
+  "stats": {
+    "talkSuccess": 3,
+    "shares": 0,
+    "won": 7,
+    "lost": 0
+  },
+  "tracked": "side2",
+  "size": "normal",
+  "weapon": "wooden_sword",
+  "weather": "clear",
+  "day": 1,
+  "savedAt": 1795355502841,
+  "bonds": {
+    "ali": 3,
+    "mint": 3,
+    "yuzu": 3
+  },
+  "bondWins": {
+    "mint": 3
+  },
+  "titles": [
+    "月光小勇者"
+  ],
+  "chapterDone": true
+}

@@ -45,8 +45,10 @@ export function quizPanel(o: QuizOpts): Promise<number> {
       const bubble = el('div', 'qz-cat', `<img src="${A(npc.portrait ?? npc.sprite)}"><div class="qz-say">${G.fmt(npc.name)}：「慢慢想，不用急喵。」</div>`, body);
       const say = bubble.querySelector('.qz-say') as HTMLElement;
       const idx = shuffle(q.choices.map((_, k) => k));
+      const wrongButtons: HTMLButtonElement[] = [];
       for (const k of idx) {
         const b = el('button', 'qz-btn', q.choices[k], grid) as HTMLButtonElement;
+        if (k !== q.answer) wrongButtons.push(b);
         b.onclick = () => {
           if (b.disabled || grid.classList.contains('done')) return;
           if (k === q.answer) {
@@ -59,6 +61,14 @@ export function quizPanel(o: QuizOpts): Promise<number> {
           } else {
             tries++; qz.wrong++; b.disabled = true; b.classList.add('no'); sfx.blip();
             say.innerHTML = `${G.fmt(npc.name)}：「${pick(RETRY)}」<br><small>🐾 提示：${q.hint}</small>`;
+            if (tries === 1 && s.observation >= 4) {
+              const other = wrongButtons.find(button => !button.disabled);
+              if (other) {
+                other.disabled = true;
+                other.classList.add('qz-eliminated');
+                el('small', '', '<br>🔍 觀察力幫妳刪掉一個不對的答案', say);
+              }
+            }
             bubble.classList.remove('wig'); void bubble.offsetWidth; bubble.classList.add('wig');
           }
         };

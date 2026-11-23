@@ -1,0 +1,183 @@
+{
+  "version": 1,
+  "name": "小葵",
+  "money": 188,
+  "courage": 4,
+  "kindness": 0,
+  "observation": 2,
+  "members": {
+    "hero": {
+      "id": "hero",
+      "lv": 3,
+      "exp": 64,
+      "hp": 44,
+      "mp": 12
+    }
+  },
+  "party": [
+    "hero"
+  ],
+  "inventory": {
+    "wooden_sword": 1,
+    "cookie": 3,
+    "sticker_book": 1,
+    "jelly": 2
+  },
+  "flags": {
+    "seen_arrive": true,
+    "system": true,
+    "catSpeech": true,
+    "tut_status": true,
+    "tut_quests": true,
+    "gift_t_yuzu": false,
+    "gift_t_mint": false,
+    "gift_t_ali": false,
+    "clue_farmer": true,
+    "clue_merchant": true,
+    "clue_innkeeper": true,
+    "seen_meadow": true,
+    "fp1": true,
+    "fp2": true,
+    "fp3": true
+  },
+  "quests": {
+    "main1": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main2": {
+      "status": "done",
+      "prog": {
+        "plaza": 1,
+        "talk3": 3,
+        "elder": 1
+      },
+      "seen": {
+        "talk3": [
+          "merchant",
+          "innkeeper",
+          "farmer"
+        ]
+      }
+    },
+    "main3": {
+      "status": "done",
+      "prog": {
+        "guard": 1,
+        "system": 1
+      },
+      "seen": {}
+    },
+    "main4": {
+      "status": "done",
+      "prog": {
+        "story": 1,
+        "log": 1
+      },
+      "seen": {}
+    },
+    "main5": {
+      "status": "done",
+      "prog": {
+        "shop": 1,
+        "inn": 1,
+        "farm": 1,
+        "paw": 1
+      },
+      "seen": {}
+    },
+    "main6": {
+      "status": "done",
+      "prog": {
+        "farmer": 1,
+        "garden": 1,
+        "guard": 1,
+        "tutorial": 3,
+        "prints": 3
+      },
+      "seen": {
+        "prints": [
+          "fp1",
+          "fp2",
+          "fp3"
+        ]
+      }
+    },
+    "side2": {
+      "status": "active",
+      "prog": {
+        "ask": 3,
+        "find": 1
+      },
+      "seen": {}
+    },
+    "side4": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side9": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side16": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side21": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "main7": {
+      "status": "active",
+      "prog": {},
+      "seen": {}
+    },
+    "side1": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side5": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side6": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side17": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    }
+  },
+  "map": "meadow",
+  "x": 210,
+  "y": 498,
+  "dir": 1,
+  "time": "day",
+  "stickers": [
+    "moon_paw",
+    "slime_defeat",
+    "slime_talk"
+  ],
+  "stats": {
+    "talkSuccess": 1,
+    "shares": 0,
+    "won": 3,
+    "lost": 0
+  },
+  "tracked": "main7",
+  "size": "normal",
+  "weapon": "wooden_sword",
+  "weather": "clear",
+  "day": 1,
+  "savedAt": 1795357656001
+}
