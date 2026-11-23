@@ -20,6 +20,7 @@ export function check(s: GameState, c?: Cond): boolean {
   if (c.time && s.time !== c.time) return false;
   if (c.minObs != null && s.observation < c.minObs) return false;
   if (c.map && s.map !== c.map) return false;
+  if (c.minKindCh2 != null && s.kindCh2 < c.minKindCh2) return false;
   if (c.minKindness != null && s.kindness < c.minKindness) return false;
   if (c.minCourage != null && s.courage < c.minCourage) return false;
   if (c.inParty && !(s.party.includes(c.inParty) || s.guest === c.inParty)) return false;

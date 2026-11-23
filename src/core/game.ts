@@ -11,12 +11,13 @@ import { check } from './conditions';
 import { sfx } from './sfx';
 import { music } from './music';
 import { blockTaps } from './tapguard';
-import { MEMBERS } from '../data/characters';
+import { MAX_BOND, MEMBERS } from '../data/characters';
+import { awardKindEvents, chapterOf, heroTier } from './hearts';
 import { memberStats } from './state';
 class AbortDialogue extends Error {}
 
-export interface DialogueUI { show(line: { name?: string; text: string; kind: 'npc' | 'hero' | 'system' | 'narr'; portrait?: string; portraitH?: number; think?: boolean; choices?: string[] }): Promise<number>; hide(): void; }
-export interface UIHooks { chapterEnd(): Promise<void>; shop(items: { id: string; price: number }[], title?: string): Promise<void>; dialogue: DialogueUI; activateSystem(): Promise<void>; openPanel(tab: string): Promise<void>; reward(title: string, lines: string[]): Promise<void>; fade(text?: string, white?: boolean): Promise<void>; unfade(): Promise<void>; toast(t: { title: string; text: string }): void; refresh(): void; quiz(o: any): Promise<number>; travel(): Promise<void>; stickerBoard(): Promise<void>; trade(): Promise<void>; }
+export interface DialogueUI { show(line: { name?: string; text: string; kind: 'npc' | 'hero' | 'system' | 'narr'; portrait?: string; portraitH?: number; think?: boolean; flashBow?: boolean; glitch?: boolean; choices?: { label: string; brave?: true; locked?: boolean }[] }): Promise<number>; hide(): void; }
+export interface UIHooks { chapterEnd(chapter?: 2): Promise<void>; celebrate(tier: number): Promise<void>; shop(items: { id: string; price: number }[], title?: string): Promise<void>; dialogue: DialogueUI; activateSystem(): Promise<void>; openPanel(tab: string): Promise<void>; reward(title: string, lines: string[]): Promise<void>; fade(text?: string, white?: boolean): Promise<void>; unfade(): Promise<void>; toast(t: { title: string; text: string }): void; refresh(): void; quiz(o: any): Promise<number>; travel(): Promise<void>; stickerBoard(): Promise<void>; trade(): Promise<void>; }
 
 class GameController {
   s: GameState = newState();
@@ -38,7 +39,7 @@ class GameController {
     });
     bus.on('levelUp', (u) => this.enqueue(async () => { sfx.levelUp(); await this.ui.reward('升級了喵！', [`${this.memberName(u.id)} 升到 Lv ${u.lv}！`, 'HP 和 MP 全部回復']); }));
     bus.on('toast', (t) => this.ui.toast(t));
-    bus.on('questsChanged', () => { this.checkAuto(); this.ui.refresh(); });
+    bus.on('questsChanged', () => { this.checkAuto(); this.checkKindEvents(); this.ui.refresh(); });
   }
   newGame(name: string) {
     this.s = newState(); this.s.name = name || '小葵';
@@ -47,6 +48,32 @@ class GameController {
     refreshAvailability(this.s); // main2 自動開始
   }
   load(s: GameState) { this.s = s; refreshAvailability(this.s); }
+  checkKindEvents() {
+    const n = awardKindEvents(this.s);
+    if (n) this.ui.toast({ title: `💗 善良值 +${n}`, text: '' });
+  }
+  checkTitles() {
+    const s = this.s;
+    if (this.busy || this.draining || s.titleTier >= heroTier(s.courage)) return;
+    this.enqueue(async () => {
+      while (this.s === s && s.titleTier < heroTier(s.courage)) {
+        const tier = ++s.titleTier;
+        const skill = tier === 1 ? 'not_afraid' : tier === 4 ? 'moon_heart' : undefined;
+        if (skill) {
+          const skills = ((s.skills ??= {}).hero ??= []);
+          if (!skills.includes(skill)) skills.push(skill);
+        }
+        if (tier === 3) s.inventory.shining_cape = Math.max(1, s.inventory.shining_cape ?? 0);
+        const sticker = `title_t${tier}`;
+        if (!s.stickers.includes(sticker)) s.stickers.push(sticker);
+        if (this.world) Object.assign(s, this.world.playerPos());
+        saveGame(s);
+        this.ui.refresh();
+        sfx.levelUp();
+        await this.ui.celebrate(tier);
+      }
+    });
+  }
   memberName(id: string) { return id === 'hero' ? this.s.name : (MEMBERS[id]?.name ?? id); }
   fmt(t: string) { return t.replace(/\{name\}/g, this.s.name); }
   enqueue(fn: () => Promise<void>) { this.queue.push(fn); this.drain(); }
@@ -69,9 +96,21 @@ class GameController {
   private async runLines(d: Dialogue) {
     for (const ln of d) {
       if (ln.when && !check(this.s, ln.when)) continue;
-      const choice = await this.showLine(ln);
+      const options = ln.choices?.filter(c => !c.when || check(this.s, c.when));
+      const choice = await this.showLine(ln, options);
       if (ln.act) for (const a of ln.act) await this.exec(a);
-      if (ln.choices && choice >= 0) { const c = ln.choices.filter(c => !c.when || check(this.s, c.when))[choice]; if (c.act) for (const a of c.act) await this.exec(a); if (c.next) { await this.runLines(DIALOGUES[c.next]); return; } }
+      const c = options?.[choice];
+      if (!c) continue;
+      if (c.brave) {
+        const key = `brave_${c.braveId}`;
+        if (this.s.flags[key]) continue;
+        this.s.flags[key] = true;
+        this.s.courage++;
+        this.s.journal[c.chapter ?? chapterOf(this.s)].brave++;
+        if (c.surprise) await this.showLine({ s: 'narr', t: c.surprise });
+      }
+      if (c.act) for (const a of c.act) await this.exec(a);
+      if (c.next) { await this.runLines(DIALOGUES[c.next]); return; }
     }
   }
   private speaker(s: string) {
@@ -83,7 +122,7 @@ class GameController {
     const e = ENEMIES[s]; if (e) return { name: e.name, kind: 'npc' as const, portrait: e.sprite, isEnemy: true };
     return { name: s, kind: 'npc' as const };
   }
-  private async showLine(ln: Line) {
+  private async showLine(ln: Line, options?: Line['choices']) {
     const sp: any = this.speaker(ln.s);
     let text = this.fmt(ln.t);
     if (sp.isCat && !this.s.flags.catSpeech) text = ln.meow ?? this.meowOf(ln.t);
@@ -94,7 +133,10 @@ class GameController {
     else if (sp.goblin) sfx.goblin();
     else if (sp.isEnemy) sfx.blob();
     else if (sp.kind === 'hero' || sp.kind === 'npc') sfx.talkBlip();
-    return this.ui.dialogue.show({ name: sp.name, text, kind: sp.kind, portrait: sp.portrait, portraitH: sp.portraitH, think: ln.think, choices: ln.choices?.filter(c => !c.when || check(this.s, c.when)).map(c => c.label) });
+    return this.ui.dialogue.show({ name: sp.name, text, kind: sp.kind, portrait: sp.portrait, portraitH: sp.portraitH, think: ln.think, flashBow: ln.flashBow, glitch: ln.glitch, choices: options?.map(c => {
+      const locked = (c.minCourage ?? 0) > this.s.courage;
+      return { brave: c.brave, locked, label: locked ? `再勇敢一點就能做到！（勇氣值 ${c.minCourage}）` : c.label };
+    }) });
   }
   // 新的一天（旅店休息、睡覺）：每天一次的小事件、送禮物重新開放；招財有機會限時特價；交換小攤換一批
   newDay() {
@@ -102,10 +144,10 @@ class GameController {
     if (Math.random() < 0.4) s.flags.daily_sale = true;
     s.day = (s.day ?? 0) + 1;
   }
-  bondUp(id: string, n = 1) {
+  bondUp(id: string, n = 1, level?: 4) {
     const s = this.s; const b = (s.bonds ??= {}); const before = b[id] ?? (s.members[id]?.joined ? 1 : 0);
-    b[id] = Math.min(3, before + n);
-    if (b[id] > before && MEMBERS[id]) this.ui.toast({ title: '羈絆提升了！', text: `${MEMBERS[id].name}的羈絆變成 ${'❤'.repeat(b[id])}${'♡'.repeat(3 - b[id])}${b[id] === 3 ? '（最高了！）' : ''}` });
+    b[id] = Math.max(before, level ?? Math.min(MAX_BOND - 1, before + n));
+    if (b[id] > before && MEMBERS[id]) this.ui.toast({ title: '羈絆提升了！', text: `${MEMBERS[id].name}的羈絆變成 ${'❤'.repeat(b[id])}${'♡'.repeat(Math.max(0, MAX_BOND - b[id]))}${b[id] === MAX_BOND ? '（最高了！）' : ''}` });
     refreshAvailability(s);
   }
   async exec(a: Action) {
@@ -123,7 +165,7 @@ class GameController {
       case 'trade': this.ui.dialogue.hide(); await this.ui.trade(); break;
       case 'travel': this.ui.dialogue.hide(); await this.ui.travel(); break;
       case 'stickerBoard': this.ui.dialogue.hide(); await this.ui.stickerBoard(); break;
-      case 'bond': this.bondUp(a.id, a.n ?? 1); break;
+      case 'bond': this.bondUp(a.id, a.n ?? 1, a.level); break;
       case 'newDay': this.newDay(); break;
       case 'innTalk': {
         // 旅店休息時的「營火對話」：從還沒聽過、隊伍裡的夥伴可以說的對話中隨機挑一段
@@ -180,24 +222,39 @@ class GameController {
       case 'recruit': {
         this.ensureMember(a.id); s.members[a.id].joined = true; (s.bonds ??= {})[a.id] = Math.max(1, s.bonds[a.id] ?? 0); if (s.guest === a.id) s.guest = null;
         if (!s.party.includes(a.id) && s.party.length < 3) s.party.push(a.id);
+        refreshAvailability(s);
         sfx.newFriend(); await this.ui.reward(`${MEMBERS[a.id].name}加入隊伍了喵！`, [`${MEMBERS[a.id].name}（${MEMBERS[a.id].role}）`, s.party.includes(a.id) ? '已經在隊伍裡，會跟著妳走' : '隊伍滿了，在「隊伍」頁可以換人']);
         break;
       }
       case 'guest': if (a.id) { this.ensureMember(a.id); } s.guest = a.id; this.world?.refreshWorld?.(); break;
       case 'title': (s.titles ??= []).includes(a.id) || s.titles!.push(a.id); this.ui.toast({ title: '獲得稱號', text: `「${a.id}」` }); break;
       case 'music': music.play(a.id as any); break;
-      case 'chapterEnd': this.ui.dialogue.hide(); s.chapterDone = true; await this.ui.chapterEnd(); break;
+      case 'chapterEnd':
+        this.ui.dialogue.hide();
+        if (a.chapter === 2) {
+          s.chapter2Done = true;
+          this.save();
+          await this.ui.chapterEnd(2);
+          await this.ui.openPanel('journal2');
+        } else {
+          s.chapterDone = true;
+          await this.ui.chapterEnd();
+          await this.ui.openPanel('journal1');
+        }
+        break;
+      case 'c2Breeze': await this.world?.blowSeed(); break;
       case 'take': s.inventory[a.id] = Math.max(0, (s.inventory[a.id] ?? 0) - (a.n ?? 1)); break;
-      case 'shop': this.ui.dialogue.hide(); await this.ui.shop(a.items, a.title); break;
+      case 'shop': this.ui.dialogue.hide(); await this.ui.shop(a.items.filter(item => check(s, item.when)), a.title); break;
       case 'party': this.ui.dialogue.hide(); await this.ui.openPanel('party'); break;
       case 'wait': await new Promise(r => setTimeout(r, a.ms)); break;
       case 'fog': this.world?.fogBurst?.(a.x, a.y, a.n ?? 8); break;
       case 'shake': this.world?.cameras?.main?.shake(a.ms ?? 500, 0.01); break;
       case 'stage': this.world?.stage(a.playerLift, a.at); break;
-      case 'walkOff': await this.world?.walkOff(a.npc, a.x, a.y, a.ms); break;
+      case 'walkOff': await this.world?.walkOff(a.npc, a.x, a.y, a.ms, a.ride); break;
       case 'dim': this.world?.moonDim?.(); break;
       case 'sfx': (sfx as any)[a.id]?.(); break;
     }
+    this.checkKindEvents();
     this.ui.refresh();
   }
   // 「自動完成」的目標：條件一成立就打勾（例如：找到至少一位夥伴）
@@ -217,6 +274,8 @@ class GameController {
     const first = this.s.kindness === 0 && !this.s.flags.kindness_explained;
     this.s.flags.kindness_explained = true;
     this.s.kindness += n;
+    if (this.s.quests.c2m1?.status === 'active' || this.s.quests.c2m1?.status === 'done') this.s.kindCh2 += n;
+    this.s.journal[chapterOf(this.s)].helps++;
     this.ui.toast({
       title: `💗 善良值 +${n}`,
       text: first ? '做溫柔的事，善良值就會變多喵！善良值越高，魔物越願意聽妳說話。' : '',
