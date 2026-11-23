@@ -3,11 +3,17 @@ import { TILE } from '../data/maps';
 // 程式繪製的像素地面與小圖示（暖色、童話感，與生成的美術素材搭配）
 function rng(seed: number) { return () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 0x10000; }; }
 const SOLID_GRASS = '.,TGx';
-export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false, mist = false) {
+export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false, mist = false, valley = false) {
   const h = tiles.length, w = tiles[0].length; const T = TILE;
   const tex = scene.textures.createCanvas(key, w * T, h * T)!; const c = tex.getContext(); const r = rng(1234 + w * h);
   const at = (x: number, y: number) => (y < 0 || y >= h || x < 0 || x >= w) ? 'T' : tiles[y][x];
   const px = (x: number, y: number, col: string, s = 2) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), s, s); };
+  const forestSoil = valley ? '#8ab768' : mist ? '#615478' : '#2f4a37';
+  const [soilDark, soilLight] = valley ? ['#77a458', '#a3c878'] : mist ? ['#554769', '#75638d'] : ['#263d2d', '#3b5a42'];
+  const [grassBase, grassBlade, grassTip] = valley ? ['#77a759', '#51814d', '#a8cc74']
+    : mist ? ['#524a6f', '#413653', '#9b83b6'] : ['#29402f', '#1d3324', '#5f8f62'];
+  const [trailBase, trailDark, trailLight] = valley ? ['#d8bd91', '#c2a87e', '#ebd7a6']
+    : mist ? ['#91738a', '#765d76', '#ab87a0'] : ['#5c4a35', '#4b3b2a', '#6e5a42'];
   const grass = (X: number, Y: number, dark = false) => {
     c.fillStyle = dark ? '#5e9e44' : '#7cc35a'; c.fillRect(X, Y, T, T);
     for (let i = 0; i < 10; i++) px(X + r() * 30, Y + r() * 30, dark ? '#4f8a38' : (r() < .5 ? '#6aae4c' : '#93d36c'));
@@ -35,6 +41,45 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
         for (let i = 0; i < 4; i++) px(X + r() * 30, Y + r() * 30, '#e9e1d0');
         break;
       }
+      case 'C': {
+        if (valley) {
+          c.fillStyle = '#85757b'; c.fillRect(X, Y, T, T);
+          // 高低錯落的岩層：亮面朝上，岩縫在下。
+          for (let ledge = 0; ledge < 3; ledge++) {
+            const offset = Math.floor(r() * 5) * 2;
+            const yy = Y + ledge * 10;
+            c.fillStyle = '#b5a59a'; c.fillRect(X, yy, T, 3);
+            c.fillStyle = '#a29390'; c.fillRect(X + offset, yy + 3, T - offset, 5);
+            c.fillStyle = '#716877'; c.fillRect(X + offset, yy + 8, T - offset, 2);
+            c.fillRect(X + 30 - offset, yy + 3, 2, 5);
+          }
+          if (at(x, y + 1) !== 'C') {
+            c.fillStyle = '#668b4a'; c.fillRect(X, Y + 28, T, 4);
+            c.fillStyle = '#a1bd63'; c.fillRect(X + 4, Y + 26, 11, 4); c.fillRect(X + 21, Y + 28, 7, 2);
+          }
+          break;
+        }
+        c.fillStyle = '#44464e'; c.fillRect(X, Y, T, T);
+        for (let ledge = 0; ledge < 4; ledge++) {
+          c.fillStyle = ledge % 2 ? '#656470' : '#797781';
+          c.fillRect(X + 2 + Math.floor(r() * 7), Y + ledge * 8, 20 + Math.floor(r() * 8), 5);
+        }
+        break;
+      }
+      case 'v': {
+        c.fillStyle = valley ? '#57a5af' : '#477d8c'; c.fillRect(X, Y, T, T);
+        for (let ripple = 0; ripple < 5; ripple++) {
+          c.fillStyle = ripple % 2 ? (valley ? '#8dcbd0' : '#70aabb') : (valley ? '#64b2be' : '#5596a6');
+          c.fillRect(X + Math.floor(r() * 20), Y + ripple * 6 + 2, 7 + Math.floor(r() * 5), 2);
+        }
+        if (valley) for (const dy of [-1, 1]) {
+          if ('vbC'.includes(at(x, y + dy))) continue;
+          const bank = Y + (dy === -1 ? 0 : T - 3);
+          c.fillStyle = '#c9c294'; c.fillRect(X, bank, T, 3);
+          c.fillStyle = '#a7d8c9'; c.fillRect(X + 3, bank + dy * -3, 20, 2);
+        }
+        break;
+      }
       case 'w': {
         c.fillStyle = '#4aa3df'; c.fillRect(X, Y, T, T);
         for (let i = 0; i < 3; i++) { c.fillStyle = '#8fd0f5'; c.fillRect(X + r() * 24, Y + 4 + r() * 24, 6, 2); }
@@ -43,7 +88,7 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
         break;
       }
       case 'b': {
-        c.fillStyle = '#4aa3df'; c.fillRect(X, Y, T, T); c.fillStyle = '#b07a43'; c.fillRect(X + 3, Y, T - 6, T);
+        c.fillStyle = valley ? '#57a5af' : '#4aa3df'; c.fillRect(X, Y, T, T); c.fillStyle = '#b07a43'; c.fillRect(X + 3, Y, T - 6, T);
         c.fillStyle = '#7d522a'; for (let k = 0; k < 4; k++) c.fillRect(X + 3, Y + k * 8 + 7, T - 6, 1);
         c.fillStyle = '#6b4320'; c.fillRect(X + 1, Y, 3, T); c.fillRect(X + T - 4, Y, 3, T);
         break;
@@ -86,21 +131,21 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
         break;
       }
       case 'k': { // 黑森林地面
-        c.fillStyle = (mist ? '#615478' : '#2f4a37'); c.fillRect(X, Y, T, T);
-        for (let i = 0; i < 9; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? (mist ? '#554769' : '#263d2d') : (mist ? '#75638d' : '#3b5a42'));
+        c.fillStyle = forestSoil; c.fillRect(X, Y, T, T);
+        for (let i = 0; i < 9; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? soilDark : soilLight);
         if (r() < .12) { const mx = X + 6 + r() * 18, my = Y + 8 + r() * 16; c.fillStyle = '#9ff3ff'; c.fillRect(mx, my, 4, 2); c.fillStyle = '#e9fdff'; c.fillRect(mx + 1, my + 2, 2, 3); }
         break;
       }
       case 'g': { // 黑森林草叢（會遇到魔物）
-        c.fillStyle = (mist ? '#524a6f' : '#29402f'); c.fillRect(X, Y, T, T);
-        for (let i = 0; i < 7; i++) { const gx = X + 2 + r() * 26, gy = Y + 6 + r() * 24; c.fillStyle = (mist ? '#413653' : '#1d3324'); c.fillRect(gx, gy - 8, 2, 8); c.fillRect(gx - 3, gy - 6, 2, 6); c.fillRect(gx + 3, gy - 6, 2, 6); c.fillStyle = (mist ? '#9b83b6' : '#5f8f62'); c.fillRect(gx, gy - 9, 2, 2); }
+        c.fillStyle = grassBase; c.fillRect(X, Y, T, T);
+        for (let i = 0; i < 7; i++) { const gx = X + 2 + r() * 26, gy = Y + 6 + r() * 24; c.fillStyle = grassBlade; c.fillRect(gx, gy - 8, 2, 8); c.fillRect(gx - 3, gy - 6, 2, 6); c.fillRect(gx + 3, gy - 6, 2, 6); c.fillStyle = grassTip; c.fillRect(gx, gy - 9, 2, 2); }
         break;
       }
       case 'q': { // 黑森林小路
-        c.fillStyle = (mist ? '#615478' : '#2f4a37'); c.fillRect(X, Y, T, T); c.fillStyle = (mist ? '#91738a' : '#5c4a35'); c.fillRect(X + 3, Y + 3, T - 6, T - 6);
+        c.fillStyle = forestSoil; c.fillRect(X, Y, T, T); c.fillStyle = trailBase; c.fillRect(X + 3, Y + 3, T - 6, T - 6);
         const isq = (dx: number, dy: number) => 'q'.includes(at(x + dx, y + dy));
         if (isq(-1, 0)) c.fillRect(X, Y + 3, 4, T - 6); if (isq(1, 0)) c.fillRect(X + T - 4, Y + 3, 4, T - 6); if (isq(0, -1)) c.fillRect(X + 3, Y, T - 6, 4); if (isq(0, 1)) c.fillRect(X + 3, Y + T - 4, T - 6, 4);
-        for (let i = 0; i < 5; i++) px(X + 4 + r() * 24, Y + 4 + r() * 24, r() < .5 ? (mist ? '#765d76' : '#4b3b2a') : (mist ? '#ab87a0' : '#6e5a42'));
+        for (let i = 0; i < 5; i++) px(X + 4 + r() * 24, Y + 4 + r() * 24, r() < .5 ? trailDark : trailLight);
         break;
       }
       case 'd': { c.fillStyle = '#e8d39c'; c.fillRect(X, Y, T, T); for (let i = 0; i < 8; i++) px(X + r() * 30, Y + r() * 30, r() < .5 ? '#d6bd7f' : '#f3e2b5'); break; }
@@ -109,6 +154,43 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
   }
   tex.refresh();
   return SOLID_GRASS;
+}
+export function buildValleyDecor(scene: Phaser.Scene) {
+  const draw = (key: string, w: number, h: number, paint: (c: CanvasRenderingContext2D) => void) => {
+    if (scene.textures.exists(key)) return;
+    const tex = scene.textures.createCanvas(key, w, h)!;
+    paint(tex.getContext());
+    tex.refresh();
+  };
+  draw('valley_vines', 38, 56, c => {
+    for (const [x, length] of [[6, 34], [18, 52], [29, 41]]) {
+      for (let y = 0; y < length; y += 6) {
+        const stem = x + ((y / 6) % 2) * 2;
+        c.fillStyle = '#485e43'; c.fillRect(stem, y, 4, 8);
+        c.fillStyle = '#759650'; c.fillRect(stem - 4, y + 2, 6, 4); c.fillRect(stem + 3, y + 5, 6, 3);
+        c.fillStyle = '#a9be66'; c.fillRect(stem - 3, y + 2, 4, 2);
+      }
+    }
+  });
+  draw('valley_mushrooms', 38, 26, c => {
+    for (const [x, y, w] of [[9, 12, 10], [23, 7, 14], [30, 17, 8]]) {
+      c.fillStyle = 'rgba(192,255,219,.28)'; c.fillRect(x - w / 2 - 3, y - 2, w + 6, 9);
+      c.fillRect(x - w / 2, y - 5, w, 3);
+      c.fillStyle = '#a6c77a'; c.fillRect(x - 5, y + 7, w + 1, 3);
+      c.fillStyle = '#fff2b8'; c.fillRect(x - 1, y + 3, 3, 6);
+      c.fillStyle = '#6ccbc1'; c.fillRect(x - w / 2, y + 1, w, 4);
+      c.fillStyle = '#ccfff2'; c.fillRect(x - w / 2 + 2, y - 2, w - 4, 4);
+      c.fillStyle = '#f4fff0'; c.fillRect(x - 1, y - 2, 3, 2);
+    }
+  });
+  draw('valley_boulder', 60, 46, c => {
+    c.fillStyle = '#688650'; c.fillRect(6, 36, 48, 8);
+    c.fillStyle = '#777181'; c.fillRect(6, 21, 48, 16); c.fillRect(12, 12, 38, 27);
+    c.fillStyle = '#a39a98'; c.fillRect(10, 19, 38, 12); c.fillRect(17, 12, 32, 13);
+    c.fillStyle = '#c2b7a4'; c.fillRect(18, 8, 23, 7); c.fillRect(14, 15, 11, 6);
+    c.fillStyle = '#6a8c46'; c.fillRect(24, 7, 19, 6); c.fillRect(37, 12, 11, 5); c.fillRect(8, 33, 14, 6);
+    c.fillStyle = '#a6bf69'; c.fillRect(28, 5, 10, 4); c.fillRect(40, 10, 7, 3); c.fillRect(9, 32, 9, 3);
+  });
 }
 export function buildIcons(scene: Phaser.Scene) {
   const mk = (key: string, w: number, h: number, f: (c: CanvasRenderingContext2D) => void) => { if (scene.textures.exists(key)) return; const t = scene.textures.createCanvas(key, w, h)!; f(t.getContext()); t.refresh(); };

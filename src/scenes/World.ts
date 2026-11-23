@@ -1,3 +1,5 @@
+import { THOUGHTS } from '../data/hearts_content';
+import { chapterOf, isChapter2Map } from '../core/hearts';
 import Phaser from 'phaser';
 import { MAPS, TILE, GLINTS, TRIGGERS, WONDERS } from '../data/maps';
 import { NPCS } from '../data/npcs';
@@ -7,22 +9,22 @@ import type { Cond, NpcDef, GlintDef, MapDef, WonderDef } from '../data/types';
 import { G } from '../core/game';
 import { check, objDone } from '../core/conditions';
 import { notify, currentObjective } from '../core/quests';
-import { buildGround, buildIcons } from './textures';
+import { buildGround, buildIcons, buildValleyDecor } from './textures';
 import { sfx } from '../core/sfx';
 import { music } from '../core/music';
 import { blockTaps, tapsBlocked } from '../core/tapguard';
 
-const SOLID = 'TwFW';
+const SOLID = 'TwFWCv';
 // 外觀服裝：主角的貓耳髮箍／月光雨衣、夥伴的月光宴會裝（只改外觀）
 export const heroKey = (s: { outfit?: string }) => s.outfit && ['ears', 'coat', 'coat_ears'].includes(s.outfit) ? 'hero_' + s.outfit : 'hero';
 const spriteFor = (s: { feast?: boolean; flags: Record<string, boolean> }, def: NpcDef) => s.feast && s.flags.party_outfit && ['ali', 'mint', 'yuzu'].includes(def.id) ? def.id + '_feast' : def.sprite;
 const SPEED = 118;
-type Interactable = { kind: 'npc'; def: NpcDef; spr: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image } | { kind: 'glint'; def: GlintDef; spr: Phaser.GameObjects.Image };
+type Interactable = { kind: 'npc'; def: NpcDef; spr: Phaser.GameObjects.Sprite | Phaser.GameObjects.Image; thought?: boolean } | { kind: 'glint'; def: GlintDef; spr: Phaser.GameObjects.Image };
 
 export class WorldScene extends Phaser.Scene {
   map!: MapDef; player!: Phaser.GameObjects.Sprite; shadow!: Phaser.GameObjects.Image;
   blocked: boolean[][] = []; propBlocked: boolean[][] = [];
-  npcs: { def: NpcDef; spr: Phaser.GameObjects.Image; sh: Phaser.GameObjects.Image; mark: Phaser.GameObjects.Image; tile: [number, number] }[] = [];
+  npcs: { def: NpcDef; spr: Phaser.GameObjects.Image; sh: Phaser.GameObjects.Image; mark: Phaser.GameObjects.Image; thought?: Phaser.GameObjects.Text; tile: [number, number] }[] = [];
   glints: { def: GlintDef; spr: Phaser.GameObjects.Image }[] = [];
   condProps: Phaser.GameObjects.Image[] = [];
   paws: Phaser.GameObjects.Image[] = [];
@@ -45,11 +47,14 @@ export class WorldScene extends Phaser.Scene {
     this.playerLift = 0; this.mistOverlay = undefined; this.vignette = undefined;
     this.npcs = []; this.glints = []; this.condProps = []; this.paws = []; this.followers = []; this.trail = []; this.glows = []; this.path = []; this.pathTarget = null;
     const s = G.s; this.map = MAPS[s.map]; s.size = 'normal'; this.wonderSprs = []; this.activeWonder = null; this.nearWonder = null;
-    const gk = 'ground_' + this.map.id; if (!this.textures.exists(gk)) buildGround(this, gk, this.map.tiles, !!this.map.forest, this.map.mist);
+    const valley = this.map.id === 'echovalley';
+    const gk = 'ground_' + this.map.id;
+    if (!this.textures.exists(gk)) buildGround(this, gk, this.map.tiles, !!this.map.forest, this.map.mist, valley);
+    if (valley) buildValleyDecor(this);
     const W = this.map.tiles[0].length * TILE, H = this.map.tiles.length * TILE;
     this.add.image(0, 0, gk).setOrigin(0).setDepth(-10);
     if (this.map.indoor) this.cameras.main.setBounds(0, -40, W, H + 160).setBackgroundColor('#1b120c');
-    else this.cameras.main.setBounds(-16, -70, W + 32, H + 230).setBackgroundColor(this.map.forest ? '#13241c' : '#2d5a2a');
+    else this.cameras.main.setBounds(-16, -70, W + 32, H + 230).setBackgroundColor(valley ? '#85757b' : this.map.forest ? '#13241c' : '#2d5a2a');
     this.blocked = this.map.tiles.map(row => [...row].map(ch => SOLID.includes(ch)));
     // 樹牆
     if (this.map.trees) this.map.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
@@ -60,7 +65,11 @@ export class WorldScene extends Phaser.Scene {
     // 地圖外圍的裝飾樹（讓畫面捲到控制鈕上方時不會露出空白）
     if (this.map.trees) for (let yy = H + 34; yy < H + 260; yy += 40) for (let xx = -10; xx < W + 20; xx += 34) this.add.image(xx + ((yy / 40) % 2) * 17, yy, this.map.flipTrees ? 'w_ftree' : this.map.forest ? 'ftree' : 'tree').setOrigin(.5, 1).setScale(this.map.flipTrees ? .62 : this.map.forest ? .74 : .62).setDepth(yy).setTint(0xb8c8b0);
     // 小溪閃光
-    this.map.tiles.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === 'w' && (x * 3 + y) % 4 === 0) { const sp = this.add.rectangle(x * TILE + 10, y * TILE + 14, 8, 2, 0xd8f2ff).setDepth(-5); this.tweens.add({ targets: sp, alpha: .1, x: sp.x + 8, duration: 900 + (x % 3) * 300, yoyo: true, repeat: -1 }); } }));
+    this.map.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
+      if ((ch !== 'w' && ch !== 'v') || (x * 3 + y) % 4 !== 0) return;
+      const sp = this.add.rectangle(x * TILE + 10, y * TILE + 14, 8, 2, 0xd8f2ff).setDepth(-5);
+      this.tweens.add({ targets: sp, alpha: .1, x: sp.x + 8, duration: (valley ? 2200 : 900) + (x % 3) * 300, yoyo: true, repeat: -1 });
+    }));
     // 道具
     for (const p of this.map.props) {
       if (p.when) continue; // 有條件的裝飾：在 refreshWorld 裡畫
@@ -89,9 +98,10 @@ export class WorldScene extends Phaser.Scene {
     this.applyZoom(); this.scale.on('resize', this.applyZoom, this);
     this.events.once('shutdown', () => this.scale.off('resize', this.applyZoom, this));
     // 夜晚
-    const chapter2 = this.map.mist || this.map.id === 'rootvillage';
+    const lightNight = this.map.mist || valley;
+    const chapter2 = lightNight || this.map.id === 'rootvillage';
     this.night = this.add.rectangle(0, 0, 4000, 4000, chapter2 ? 0x2d2448 : 0x141c5c,
-      this.map.mist ? .06 : chapter2 ? .26 : this.map.indoor ? .3 : .52).setOrigin(0).setScrollFactor(0).setDepth(9000);
+      lightNight ? .06 : chapter2 ? .26 : this.map.indoor ? .3 : .52).setOrigin(0).setScrollFactor(0).setDepth(9000);
     // 下雨天（只在村子裡、白天）：灰灰的天色 + 雨絲
     this.rain = this.add.container(0, 0).setScrollFactor(0).setDepth(9001).setVisible(false);
     if (this.map.id === 'village') {
@@ -104,7 +114,7 @@ export class WorldScene extends Phaser.Scene {
       }
     }
     // 黑森林：四周暗暗的（暗角），只有中間看得清楚
-    if (this.map.forest) {
+    if (this.map.forest && !valley) {
       const postFX = this.cameras.main.postFX;
       this.vignette = postFX?.addVignette?.(.5, .5, .62, this.map.mist ? .04 : .55);
     }
@@ -164,15 +174,19 @@ export class WorldScene extends Phaser.Scene {
     const s = G.s;
     this.labels.forEach(l => l.text.setVisible(check(s, l.when)));
     if (this.mistOverlay) {
-      const mist = s.kindness < 12 ? 0 : s.kindness < 20 ? 1 : 2;
+      const mist = s.kindCh2 < 12 ? 0 : s.kindCh2 < 20 ? 1 : 2;
       this.mistOverlay.setFillStyle(0xe1baff, [.26, .17, .08][mist]);
       if (this.vignette) this.vignette.strength = [.04, .025, .01][mist];
     }
     if (this.player && this.player.texture.key !== heroKey(s)) this.player.setTexture(heroKey(s), this.dir * 3);
     const prevF = new Map(this.followers.map(f => [f.def.id, { x: f.x, y: f.y }]));
+    if (this.map.id === 'rootvillage') {
+      const feast = s.flags.c2_feast_started && s.quests.c2m12?.status === 'active';
+      this.night.setFillStyle(feast ? 0x262044 : 0x2d2448, feast ? .55 : .26);
+    }
     this.night.setVisible(s.time === 'night' || !!this.map.nightAlways); this.rain.setVisible(s.weather === 'rain' && s.time === 'day'); this.glows.forEach(g => g.setVisible(s.time === 'night'));
     // NPC
-    this.npcs.forEach(n => { n.spr.destroy(); n.sh.destroy(); n.mark.destroy(); }); this.npcs = [];
+    this.npcs.forEach(n => { n.spr.destroy(); n.sh.destroy(); n.mark.destroy(); n.thought?.destroy(); }); this.npcs = [];
     this.blocked = this.propBlocked.map(r => r.slice());
     const marks = this.markerTargets();
     const followIds: NpcDef[] = [];
@@ -193,7 +207,11 @@ export class WorldScene extends Phaser.Scene {
       if (pf) { const tx0 = sp.x, ty0 = sp.y; spr.setPosition(pf.x, pf.y); sh.setPosition(pf.x, pf.y); mark.setAlpha(0); this.tweens.add({ targets: spr, x: tx0, y: ty0 + 3, duration: 900, ease: 'Sine.easeInOut' }); this.tweens.add({ targets: sh, x: tx0, y: ty0, duration: 900, ease: 'Sine.easeInOut', onComplete: () => mark.setAlpha(1) }); }
       const tile: [number, number] = [Math.floor(sp.x / TILE), Math.floor((sp.y - 4) / TILE)];
       if (this.blocked[tile[1]] && !lift) this.blocked[tile[1]][tile[0]] = true;
-      this.npcs.push({ def, spr, sh, mark, tile });
+      const entry = THOUGHTS[def.id];
+      const thought = entry && (!entry.chapter || entry.chapter === (isChapter2Map(s.map) ? 2 : 1)) && s.observation >= entry.obs && !s.stickers.includes(`thought_${def.id}`)
+        ? this.add.text(sp.x + 24, mark.y, '🔍', { fontSize: '16px', backgroundColor: '#fff5d5', padding: { x: 3, y: 2 } }).setOrigin(.5).setDepth(9501)
+        : undefined;
+      this.npcs.push({ def, spr, sh, mark, thought, tile });
     }
     this.syncFollowers(followIds);
     this.followers.forEach(f => { const k = spriteFor(s, f.def); if (f.spr.texture.key !== k) f.spr.setTexture(k); });
@@ -229,13 +247,31 @@ export class WorldScene extends Phaser.Scene {
     if (lift != null) this.playerLift = lift;
     this.refreshWorld();
   }
-  async walkOff(id: string, x: number, y: number, duration: number) {
+  async blowSeed() {
+    const seed = this.add.image(this.player.x - 28, this.player.y - 22, 'c2_seed').setDepth(9000);
+    await new Promise<void>(resolve => {
+      this.tweens.add({ targets: seed, x: seed.x + 164, y: seed.y - 165, angle: 100,
+        alpha: { from: 1, to: 0 }, ease: 'Sine.in', duration: 2200,
+        onComplete: () => { seed.destroy(); resolve(); } });
+    });
+  }
+  async walkOff(id: string, x: number, y: number, duration: number, ride = false) {
     const n = this.npcs.find(n => n.def.id === id);
     if (!n) return;
     this.tweens.killTweensOf(n.spr);
+    if (ride) {
+      this.player.setPosition(n.spr.x, n.spr.y + 1);
+      this.playerLift = 16;
+      this.dir = y < n.spr.y ? 1 : 0;
+    }
     await new Promise<void>(resolve => {
-      this.tweens.add({ targets: [n.spr, n.sh], x, y, alpha: 0, duration, onComplete: () => resolve() });
+      this.tweens.add({
+        targets: ride ? [n.spr, this.player] : [n.spr, n.sh],
+        x, y: (target: unknown) => target === this.player ? y + 1 : y,
+        ...(ride ? {} : { alpha: 0 }), duration, onComplete: () => resolve(),
+      });
     });
+    if (ride) this.playerLift = 0;
   }
   // 紫色的霧：從某個地方飄出來，然後慢慢散去
   fogBurst(x: number, y: number, n = 8) {
@@ -299,6 +335,8 @@ export class WorldScene extends Phaser.Scene {
     for (const f of this.followers) { const b = f.spr.getBounds(); if (b.contains(wp.x, wp.y)) target = { kind: 'npc', def: f.def, spr: f.spr }; }
     for (const n of this.npcs) { const b = n.spr.getBounds(); if (b.contains(wp.x, wp.y)) target = { kind: 'npc', def: n.def, spr: n.spr }; }
     for (const g of this.glints) if (g.spr.getBounds().contains(wp.x, wp.y) || Phaser.Math.Distance.Between(wp.x, wp.y, g.def.x, g.def.y) < 26) target = { kind: 'glint', def: g.def, spr: g.spr };
+    const thought = this.npcs.find(n => n.thought?.getBounds().contains(wp.x, wp.y));
+    if (thought) target = { kind: 'npc', def: thought.def, spr: thought.spr, thought: true };
     if (target && this.distTo(target) < 60) { this.path = []; this.doInteract(target); return; }
     const gx = target ? target.spr.x : wp.x, gy = target ? (target.kind === 'npc' ? (target.spr.getData('gy') ?? target.spr.y) - 4 : target.spr.y) : wp.y;
     const path = this.findPath(this.player.x, this.player.y - 4, gx, gy, !!target);
@@ -361,12 +399,23 @@ export class WorldScene extends Phaser.Scene {
     this.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0); this.player.setFrame(this.dir * 3);
     if (t.kind === 'glint' && (t.def as GlintDef).needSize && G.s.size !== (t.def as GlintDef).needSize) { await G.run((t.def as GlintDef).sizeHint ?? ((t.def as GlintDef).needSize === 'big' ? 'w_toohigh' : 'w_toobig')); return; }
     if (t.kind === 'npc') {
+      if (t.thought) {
+        const id = `thought_${t.def.id}`;
+        if (!G.s.stickers.includes(id)) {
+          G.s.journal[chapterOf(G.s)].secrets++;
+          await G.run(id);
+        }
+        return;
+      }
       const rule = t.def.talk.find(r => check(G.s, r.when)); if (!rule) return;
       await G.run(rule.d, t.def.id);
     } else {
       this.followSpawn = { x: t.def.x, y: t.def.y + 8 };
-      await G.run(t.def.d);
-      if (t.def.once) G.s.flags[t.def.once] = true;
+      const chapter = chapterOf(G.s);
+      if (await G.run(t.def.d)) {
+        G.s.journal[chapter].secrets++;
+        if (t.def.once) G.s.flags[t.def.once] = true;
+      }
       notify(G.s, 'inspect', t.def.id);
     }
     this.refreshWorld();
@@ -382,7 +431,7 @@ export class WorldScene extends Phaser.Scene {
         if (this.disarmed.has(tr.id)) continue; // 剛剛逃跑／輸了：先走出這個範圍，再走進來才會重新開始
       }
       this.pendingTr.add(tr.id); this.path = []; this.pathTarget = null;
-      G.enqueue(async () => { try { if (check(G.s, tr.when) && !G.s.flags[tr.once]) { const ok = await G.run(tr.d); if (ok) G.s.flags[tr.once] = true; else this.disarmed.add(tr.id); } } finally { this.pendingTr.delete(tr.id); } });
+      G.enqueue(async () => { try { if (check(G.s, tr.when) && !G.s.flags[tr.once]) { const ok = await G.run(tr.d); if (ok) { G.s.flags[tr.once] = true; G.checkKindEvents(); } else this.disarmed.add(tr.id); } } finally { this.pendingTr.delete(tr.id); } });
     }
     this.checkZones();
   }
@@ -392,6 +441,7 @@ export class WorldScene extends Phaser.Scene {
   }
   // ---------- 每幀 ----------
   update(_t: number, dms: number) {
+    if (!this.transitioning) G.checkTitles();
     const dt = Math.min(dms, 50) / 1000;
     let vx = 0, vy = 0;
     const locked = G.busy > 0 || this.transitioning;
@@ -464,7 +514,7 @@ export class WorldScene extends Phaser.Scene {
     if (G.busy > 0 || (s.size && s.size !== 'normal')) return;
     const cur = currentObjective(s, 'main6');
     if (cur?.id === 'tutorial') { const n = s.quests.main6.prog.tutorial ?? 0; this.startBattle(['tut1', 'tut2', 'tut3'][n], true); return; }
-    const enabled = s.quests.main6 && objDone(s, 'main6', 'tutorial');
+    const enabled = isChapter2Map(s.map) || (s.quests.main6 && objDone(s, 'main6', 'tutorial'));
     if (!enabled) return;
     const { x, y } = this.player;
     const zone = this.map.zones.find(z => z.encounter && x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
