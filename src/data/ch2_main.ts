@@ -225,9 +225,9 @@ const dialogue: Record<string, Dialogue> = {
     { s: 'gugu', t: '小豆芽！你回來了！' },
     { s: 'sprout', t: '我回來了！我有好多話要說。' },
     { s: 'narr', t: '大家抱成一團。屋前又亮了一盞燈。', act: [kindness(3), advance('c2m6', 'home'), { type: 'stage' }] },
-    { s: 'system', t: '要怎麼幫苔角呢？……第二章後半還在製作中喵！' },
+    { s: 'system', t: '要怎麼幫苔角呢？在首領家前找薄荷吧喵！' },
   ],
-  c2_valley_locked: [{ s: 'narr', t: '藤蔓擋住了路……（第二章後半製作中）' }],
+  c2_valley_locked: [{ s: 'narr', t: '藤蔓擋住了路。先帶小豆芽回大樹根村吧。' }],
 };
 
 Object.assign(DIALOGUES, dialogue);
