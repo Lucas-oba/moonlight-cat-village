@@ -26,12 +26,12 @@ export async function advance(page, { choices = [], max = 60, log = true, stopOn
     { const qb = await page.$$('.qz-btn:not([disabled])'); if (qb.length) { await qb[0].click(); idle = 0; await sleep(300); continue; } }
     if (await vis(page, '.sys-wrap')) { await sleep(400); await page.evaluate(() => [...document.querySelectorAll('.sys-head .x')].forEach(b => b.click())); idle = 0; await sleep(300); continue; }
     if (await vis(page, '.dlg')) {
-      const btns = await page.$$('.dlg .choices button');
-      if (btns.length) { const want = choices.shift(); let hit = null; for (const b of btns) { const t = await b.textContent(); if (want && t.includes(want)) hit = b; } hit = hit || btns[0]; texts.push('[CHOICE] ' + await hit.textContent()); await hit.click(); idle = 0; await sleep(250); continue; }
-      const t = await page.textContent('.dlg-box'); await page.click('.dlg-box'); await sleep(60);
-      const box = page.locator('.dlg:not(.hidden) .dlg-box');
-      if (await box.isVisible()) await box.click({ timeout: 800 }).catch(() => {});
-      texts.push(t.replace('▼', '').trim()); idle = 0; await sleep(200); continue;
+      const btns = await page.$$('.dlg .choices button:not(.locked)');
+      if (btns.length) { const want = choices[0]; let hit = null; for (const b of btns) { const t = await b.textContent(); if (want && t.includes(want)) hit = b; } if (hit) choices.shift(); hit = hit || btns[0]; texts.push('[CHOICE] ' + await hit.textContent()); await hit.click(); idle = 0; await sleep(250); continue; }
+      const t = await page.textContent('.dlg-box');
+      await page.evaluate(() => document.querySelector('.dlg:not(.hidden) .dlg-box')
+        ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true })));
+      texts.push(t.replace('▼', '').trim()); idle = 0; await sleep(180); continue;
     }
     idle++; await sleep(250);
   }

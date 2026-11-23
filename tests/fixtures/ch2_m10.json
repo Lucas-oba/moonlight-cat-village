@@ -1,0 +1,484 @@
+{
+  "version": 1,
+  "name": "小葵",
+  "money": 0,
+  "courage": 16,
+  "kindness": 21,
+  "observation": 3,
+  "titleTier": 2,
+  "kindCh2": 15,
+  "kindAwarded": {
+    "vegetables": true,
+    "sprout": true,
+    "feast": true
+  },
+  "befriended": {
+    "mistpuff": 1
+  },
+  "journal": {
+    "1": {
+      "brave": 9,
+      "secrets": 0,
+      "friends": 0,
+      "helps": 3
+    },
+    "2": {
+      "brave": 3,
+      "secrets": 22,
+      "friends": 0,
+      "helps": 2
+    }
+  },
+  "members": {
+    "hero": {
+      "id": "hero",
+      "lv": 11,
+      "hp": 92,
+      "mp": 28,
+      "exp": 80,
+      "joined": false
+    },
+    "ali": {
+      "id": "ali",
+      "lv": 10,
+      "hp": 112,
+      "mp": 15,
+      "exp": 80,
+      "joined": true
+    },
+    "mint": {
+      "id": "mint",
+      "lv": 10,
+      "hp": 71,
+      "mp": 41,
+      "exp": 80,
+      "joined": true
+    },
+    "yuzu": {
+      "id": "yuzu",
+      "lv": 10,
+      "hp": 73,
+      "mp": 28,
+      "exp": 40,
+      "joined": true
+    },
+    "pudding": {
+      "id": "pudding",
+      "lv": 10,
+      "exp": 0,
+      "hp": 75,
+      "mp": 30,
+      "joined": true
+    }
+  },
+  "party": [
+    "hero",
+    "ali",
+    "mint"
+  ],
+  "inventory": {
+    "wooden_sword": 1,
+    "sticker_book": 1,
+    "cookie": 5,
+    "herb_tea": 2,
+    "sweet_potato": 1,
+    "shrink_dew": 1,
+    "grow_cookie": 1,
+    "moon_dew": 1,
+    "c2_softmoss": 1,
+    "c2_sleepflower": 1,
+    "c2_medicine_jar": 1,
+    "moon_berry": 1
+  },
+  "flags": {
+    "system": true,
+    "catSpeech": true,
+    "c2_tree_open": true,
+    "kindness_explained": true,
+    "c2_entered": true,
+    "lan_c2_south": true,
+    "c2_mistpuffs_peaceful": true,
+    "c2_puffs_seen": true,
+    "c2_hero_netted": false,
+    "c2_squirrel_netted": false,
+    "c2_trap_seen": true,
+    "c2_arrival_seen": true,
+    "c2_planks_1": true,
+    "c2_planks_2": true,
+    "c2_chief_house": true,
+    "c2_planks_3": true,
+    "c2_print_1": true,
+    "c2_print_2": true,
+    "c2_print_3": true,
+    "c2_valley_seen": true,
+    "c2_sprout_found": true,
+    "lan_c2_north": true,
+    "c2_home_seen": true,
+    "forest_open": true,
+    "c2_echo_called": true,
+    "c2_stone_1": true,
+    "c2_stone_2": true,
+    "c2_stone_3": true,
+    "c2_ferry_north": false,
+    "lan_c2_echo": true,
+    "v_fo": true,
+    "seen_meadow": true,
+    "v_mn": true,
+    "brave_c2_rumor_friend": true,
+    "c2_veg_1": true,
+    "c2_veg_2": true,
+    "c2_veg_3": true,
+    "c2s10_unlocked": true,
+    "c2_hollow_intro": true,
+    "c2_care_squirrel": true,
+    "c2_care_hamster": true,
+    "c2_care_rabbit": true,
+    "brave_c2_pudding_help": true,
+    "c2s5_unlocked": true,
+    "brave_c2_high_bridge": true,
+    "c2_bridge_open": true,
+    "c2_root_under": true,
+    "c2_root_over": true,
+    "c2_den_seen": true
+  },
+  "quests": {
+    "main1": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main2": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main3": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main4": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main5": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main6": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main7": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main8": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main9": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main10": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main11": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "main12": {
+      "status": "done",
+      "prog": {},
+      "seen": {}
+    },
+    "side1": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side5": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side2": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side3": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side4": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side6": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side7": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side9": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side10": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side14": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side15": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side16": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side17": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side19": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side20": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "side21": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "c2m1": {
+      "status": "done",
+      "prog": {
+        "enter": 1
+      },
+      "seen": {}
+    },
+    "c2m2": {
+      "status": "done",
+      "prog": {
+        "puffs": 1
+      },
+      "seen": {}
+    },
+    "c2m3": {
+      "status": "done",
+      "prog": {
+        "net": 1
+      },
+      "seen": {}
+    },
+    "c2m4": {
+      "status": "done",
+      "prog": {
+        "arrive": 1,
+        "planks": 3,
+        "repair": 1
+      },
+      "seen": {}
+    },
+    "c2m5": {
+      "status": "done",
+      "prog": {
+        "print1": 1,
+        "print2": 1,
+        "print3": 1,
+        "valley": 1
+      },
+      "seen": {}
+    },
+    "c2s1": {
+      "status": "done",
+      "prog": {
+        "moss": 1,
+        "dew": 1,
+        "bird": 1
+      },
+      "seen": {}
+    },
+    "c2s6": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "c2s9": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "c2s13": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "c2s14": {
+      "status": "done",
+      "prog": {
+        "clouds": 1
+      },
+      "seen": {}
+    },
+    "c2s17": {
+      "status": "available",
+      "prog": {},
+      "seen": {}
+    },
+    "c2m6": {
+      "status": "done",
+      "prog": {
+        "find": 1,
+        "home": 1
+      },
+      "seen": {}
+    },
+    "c2m7": {
+      "status": "done",
+      "prog": {
+        "mint": 1,
+        "dew": 1,
+        "moss": 1,
+        "flower": 1
+      },
+      "seen": {}
+    },
+    "c2s16": {
+      "status": "done",
+      "prog": {
+        "ride": 1
+      },
+      "seen": {}
+    },
+    "c2s8": {
+      "status": "done",
+      "prog": {
+        "clues": 3,
+        "return": 1
+      },
+      "seen": {}
+    },
+    "c2m8": {
+      "status": "done",
+      "prog": {
+        "rumor": 1,
+        "harvest": 3,
+        "fence": 1,
+        "jar": 1
+      },
+      "seen": {}
+    },
+    "c2m9": {
+      "status": "done",
+      "prog": {
+        "pudding": 1,
+        "care": 3,
+        "thanks": 1
+      },
+      "seen": {}
+    },
+    "c2m10": {
+      "status": "done",
+      "prog": {
+        "under": 1,
+        "over": 1,
+        "den": 1
+      },
+      "seen": {}
+    }
+  },
+  "map": "echovalley",
+  "x": 319,
+  "y": 131,
+  "dir": 1,
+  "time": "night",
+  "stickers": [
+    "moon_paw",
+    "forest_view",
+    "moon_feast",
+    "mistpuff_talk",
+    "title_t1",
+    "w_big",
+    "c2_canopy",
+    "c2_laundry",
+    "c2_echo_reply",
+    "c2_ferry",
+    "c2_sprout_stone",
+    "meadow_night",
+    "c2_bird",
+    "c2_high_bridge",
+    "w_small"
+  ],
+  "stats": {
+    "talkSuccess": 0,
+    "shares": 2,
+    "won": 1,
+    "lost": 0
+  },
+  "size": "normal",
+  "chapterDone": true,
+  "bonds": {
+    "ali": 3,
+    "mint": 2,
+    "yuzu": 2,
+    "pudding": 2
+  },
+  "weapon": "wooden_sword",
+  "bondWins": {
+    "ali": 1,
+    "mint": 1
+  },
+  "savedAt": 1795389398342,
+  "skills": {
+    "hero": [
+      "not_afraid"
+    ]
+  },
+  "quiz": {
+    "seen": [
+      "c2_evaporation",
+      "c2_cloud",
+      "c2_cycle",
+      "c2_ferry_left",
+      "c2_ferry_three",
+      "c2_ferry_duck",
+      "c2_moss",
+      "c2_bird"
+    ],
+    "correct": 8,
+    "wrong": 15
+  }
+}
