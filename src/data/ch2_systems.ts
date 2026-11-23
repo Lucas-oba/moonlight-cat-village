@@ -12,12 +12,13 @@ MEMBERS.pudding = {
     { id: 'small_bandage', name: '小繃帶', mp: 3, power: 16, desc: '幫一位隊友回復 HP。', learnLv: 1, kind: 'heal' },
     { id: 'soothing_purr', name: '呼嚕呼嚕', mp: 3, power: 0.20, desc: '讓下一次對話更容易成功。', learnLv: 1, kind: 'purr' },
     { id: 'lullaby', name: '搖籃曲', mp: 5, power: 0.60, desc: '有機會讓一隻魔物睡著，少動一次。', learnLv: 12, kind: 'sleepFoe' },
+    { id: 'warm_blanket', name: '暖暖毛毯', mp: 6, power: 14, desc: '幫全隊回復 14 HP，也會解除不舒服的狀態。', learnLv: 1, kind: 'healCleanse', quest: true },
   ],
 };
 
 const enemies: EnemyDef[] = [
   {
-    id: 'mistpuff', name: '霧團子', sprite: 'mistpuff', hp: 48, atk: 13, def: 3, spd: 12, exp: 40, money: 15,
+    id: 'mistpuff', mood: 'hungry', weak: '頭頂的小霧團', name: '霧團子', sprite: 'mistpuff', hp: 48, atk: 13, def: 3, spd: 12, exp: 40, money: 15,
     likesFood: true, talkBase: 0.65,
     talkLines: ['呼……妳的聲音好溫柔。我敢自己走了。'],
     talkFail: ['嗚……我還是有點怕。'],
@@ -26,7 +27,7 @@ const enemies: EnemyDef[] = [
     skills: [{ id: 'mistpuff_flee', name: '鑽進霧裡', chance: 0.12, power: 0, flee: true }],
   },
   {
-    id: 'thornling', name: '刺刺藤寶寶', sprite: 'thornling', hp: 47, atk: 15, def: 5, spd: 11, exp: 46, money: 18,
+    id: 'thornling', mood: 'hurt', weak: '捲起來的藤尖', name: '刺刺藤寶寶', sprite: 'thornling', hp: 47, atk: 15, def: 5, spd: 11, exp: 46, money: 18,
     likesFood: false, talkBase: 0.33,
     talkLines: ['妳沒有踩我的葉子。那我也把藤收起來。'],
     talkFail: ['別靠過來！我的小葉子會被踩到！'],
@@ -35,7 +36,7 @@ const enemies: EnemyDef[] = [
     skills: [{ id: 'vine_bind', name: '藤蔓綁腳', chance: 0.25, power: 0.8, status: 'bind' }],
   },
   {
-    id: 'cryshroom', name: '哭哭菇', sprite: 'cryshroom', hp: 46, atk: 14, def: 4, spd: 10, exp: 44, money: 17,
+    id: 'cryshroom', mood: 'lonely', weak: '眼淚下的小斑點', name: '哭哭菇', sprite: 'cryshroom', hp: 46, atk: 14, def: 4, spd: 10, exp: 44, money: 17,
     likesFood: false, talkBase: 0.4,
     talkLines: ['謝謝妳聽我哭。我想去擦擦眼淚。'],
     talkFail: ['嗚嗚……我現在聽不進去。'],
@@ -44,7 +45,7 @@ const enemies: EnemyDef[] = [
     skills: [{ id: 'tear_splash', name: '眼淚噗噗', chance: 0.3, power: 0.85, status: 'cry' }],
   },
   {
-    id: 'mistwolf', name: '迷霧野狼', sprite: 'mistwolf', hp: 50, atk: 18, def: 5, spd: 16, exp: 52, money: 21,
+    id: 'mistwolf', mood: 'scared', weak: '霧裡的前腳', name: '迷霧野狼', sprite: 'mistwolf', hp: 50, atk: 18, def: 5, spd: 16, exp: 52, money: 21,
     likesFood: true, talkBase: 0.37,
     talkLines: ['我們……之前見過？'],
     talkFail: ['嗚……霧太濃了，我看不清楚妳。'],
@@ -53,7 +54,7 @@ const enemies: EnemyDef[] = [
     skills: [{ id: 'mist_pounce', name: '霧中一撲', chance: 0.25, power: 1.2 }],
   },
   {
-    id: 'yarnweasel', name: '松鼠鼬', sprite: 'yarnweasel', hp: 55, atk: 15, def: 4, spd: 16, exp: 45, money: 18,
+    id: 'yarnweasel', mood: 'scared', weak: '抱著毛線的爪子', name: '松鼠鼬', sprite: 'yarnweasel', hp: 55, atk: 15, def: 4, spd: 16, exp: 45, money: 18,
     likesFood: true, talkBase: 0.45,
     talkLines: ['妳肯聽我說話呀？那我回樹根那邊去了。'],
     talkFail: ['我才沒有盯著妳的包包！'],

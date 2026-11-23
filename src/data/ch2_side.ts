@@ -226,9 +226,9 @@ const student = NPCS.find(n => n.id === 'gob1')!;
 (student.giverOf ??= []).push(school);
 student.talk.unshift({ when: { all: [{ map: village }, { any: [available(school), active(school)] }] }, d: 'c2_school' });
 const schoolQuestions = [
-  ['letter', 'shadow', 'rain', 'first', 'although'],
-  ['letter', 'listen', 'road', 'quiet', 'metaphor'],
-  ['shadow', 'because', 'although', 'metaphor', 'patient'],
+  ['kind_measure', 'soft_opposite', 'rain', 'first', 'although'],
+  ['letter', 'invite', 'warm_words', 'quiet', 'metaphor'],
+  ['shadow', 'because', 'share_phrase', 'translate_words', 'patient'],
 ];
 DIALOGUES.c2_school = [
   { s: 'gob1', t: '我做了好多字卡。妳想從哪一疊開始？', act: [start(school)], choices: [
