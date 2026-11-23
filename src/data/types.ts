@@ -3,7 +3,7 @@ import type { Voice } from '../core/sfx';
 export type Cond = {
   questActive?: string; questDone?: string; questNotDone?: string; questAvailable?: string; questNotStarted?: string;
   objCurrent?: [string, string]; objDone?: [string, string]; objNotDone?: [string, string];
-  flag?: string; notFlag?: string; time?: 'day' | 'night'; minObs?: number; minCourage?: number; minKindness?: number; map?: string;
+  flag?: string; notFlag?: string; time?: 'day' | 'night'; minObs?: number; minCourage?: number; minKindness?: number; minKindCh2?: number; map?: string;
   inParty?: string; recruited?: string; notRecruited?: string; minActive?: number; maxActive?: number; weather?: 'rain' | 'clear'; minBond?: [string, number]; maxBond?: [string, number]; minCompanions?: number;
   hasItem?: [string, number]; minStickers?: number; allStickers?: boolean; allChapter1Stickers?: boolean; hasSticker?: string;
   all?: Cond[]; any?: Cond[]; not?: Cond;
@@ -35,21 +35,22 @@ export type Action =
   | { type: 'guest'; id: string | null }
   | { type: 'title'; id: string }
   | { type: 'music'; id: string | null }
-  | { type: 'chapterEnd' }
+  | { type: 'chapterEnd'; chapter?: 2 }
+  | { type: 'c2Breeze' }
   | { type: 'take'; id: string; n?: number }
-  | { type: 'shop'; items: { id: string; price: number }[]; title?: string }
+  | { type: 'shop'; items: { id: string; price: number; when?: Cond }[]; title?: string }
   | { type: 'party' }
   | { type: 'wait'; ms: number }
   | { type: 'fog'; x: number; y: number; n?: number }
   | { type: 'shake'; ms?: number }
   | { type: 'dim' }
   | { type: 'stage'; playerLift?: number; at?: { x: number; y: number; dir?: number } }
-  | { type: 'walkOff'; npc: string; x: number; y: number; ms: number }
+  | { type: 'walkOff'; npc: string; x: number; y: number; ms: number; ride?: boolean }
   | { type: 'quiz'; subject?: 'math' | 'english' | 'science' | 'chinese' | 'mix'; tier?: number; n?: number; by?: string; title?: string; ids?: string[] }
   | { type: 'learn'; id: string; skill: string }
   | { type: 'equip'; id: string }
   | { type: 'travel' }
-  | { type: 'bond'; id: string; n?: number }
+  | { type: 'bond'; id: string; n?: number; level?: 4 }
   | { type: 'night' }
   | { type: 'stickerBoard' }
   | { type: 'gift'; id: string }
@@ -57,14 +58,20 @@ export type Action =
   | { type: 'swapIn'; id: string }
   | { type: 'abort' };
 
+type Choice = { label: string; act?: Action[]; next?: string; when?: Cond } & (
+  { brave: true; braveId: string; surprise: string; minCourage?: number; chapter?: 2 } |
+  { brave?: never; minCourage?: never }
+);
 export interface Line {
   s: string;            // 說話者：npc id、'hero'、'system'、'narr'
   t: string;            // 文字（{name} 會替換成主角名字）
   meow?: string;        // 系統啟動前貓咪說的話（沒寫就自動產生「喵」）
+  flashBow?: boolean;
+  glitch?: boolean;
   think?: boolean;      // 主角心裡的話
   act?: Action[];       // 這句顯示後執行
   when?: Cond;          // 條件不成立就跳過這句（例如夥伴在隊伍裡才說的話）
-  choices?: { label: string; act?: Action[]; next?: string; when?: Cond }[];
+  choices?: Choice[];
 }
 export type Dialogue = Line[];
 
@@ -73,16 +80,17 @@ export interface Objective { id: string; type: ObjType; text: string; targets?: 
 export interface Reward { exp?: number; money?: number; items?: { id: string; n: number }[]; courage?: number; observation?: number; flags?: string[]; sticker?: string; }
 export interface QuestDef {
   id: string; chapter?: 2; kind: 'main' | 'side'; no: number; title: string; giver?: string; summary: string;
-  prereq: string[]; bond?: [string, number]; autoStart?: boolean; ordered?: boolean; objectives: Objective[];
+  prereq: string[]; bond?: [string, number]; autoStart?: boolean; autoStartAfter?: string; ordered?: boolean; objectives: Objective[];
   rewards: Reward; rewardText?: string[]; unlocks?: string[]; onComplete?: string; comingSoon?: boolean;
 }
 
 export interface ItemDef { id: string; name: string; kind: 'heal' | 'material' | 'weapon' | 'accessory' | 'key' | 'collect'; desc: string; heal?: number; atk?: number; price?: number; battle?: boolean; food?: boolean; healAll?: boolean; bonus?: { who?: string; atk?: number; def?: number; spd?: number; hp?: number }; }
 
 export interface EnemyDef {
+  mood?: import('../core/hearts').Mood; weak?: string;
   id: string; name: string; sprite: string; hp: number; atk: number; def: number; spd: number; exp: number; money: number;
   talkBase: number; talkLines: string[]; talkFail: string[]; gifts: { item: string; chance: number }[]; info?: string[];
-  skills?: { id: string; name: string; chance: number; power: number; status?: 'sticky' | 'stun' | 'sleep' | 'bind' | 'cry'; target?: 'all'; roar?: boolean; steal?: boolean; call?: boolean; flee?: boolean }[];
+  skills?: { id: string; name: string; chance: number; power: number; status?: 'sticky' | 'stun' | 'sleep' | 'bind' | 'cry'; target?: 'all'; roar?: boolean; steal?: boolean; call?: boolean; flee?: boolean; mimic?: boolean; doze?: boolean }[];
   boss?: { lateTurn: number; lateHp: number; lateTalk: number; earlyTalk: number; lateLines: string[]; earlyLines: string[] };
   likesFood?: boolean | string[];
   talkBonus?: { when: Cond; add: number };
@@ -90,7 +98,7 @@ export interface EnemyDef {
 }
 export interface EncounterGroup { enemies: string[]; weight: number; when?: Cond; }
 export interface EncounterTable { id: string; rate: number; minSteps: number; groups: EncounterGroup[]; bg: string; }
-export interface FixedEncounter { practice?: boolean; id: string; enemies: string[]; bg: string; hint?: string; forceTalk?: boolean; talkScript?: string; noEscape?: boolean; event?: [string, string]; intro?: string; music?: string; talkFlag?: string; talkLines?: string[]; talkBonus?: number; startLines?: { who: string; t: string }[]; lateLines?: { who: string; t: string }[] }
+export interface FixedEncounter { practice?: boolean; id: string; enemies: string[]; bg: string; hint?: string; forceTalk?: boolean; talkScript?: string; noEscape?: boolean; event?: [string, string]; intro?: string; music?: import('../core/music').TrackId; talkFlag?: string; talkLines?: string[]; talkBonus?: number; startLines?: { who: string; t: string }[]; lateLines?: { who: string; t: string }[] }
 
 export interface NpcDef {
   id: string; name: string; sprite: string; portrait?: string; isCat?: boolean; scale?: number;
@@ -115,5 +123,5 @@ export interface WonderDef { id: string; map: string; x: number; y: number; mode
 export interface TriggerDef { id: string; map: string; when?: Cond; once: string; d: string; zone?: { x: number; y: number; w: number; h: number }; }
 export interface MapDef {
   id: string; name: string; tiles: string[]; props: PropDef[]; exits: ExitDef[]; zones: ZoneDef[];
-  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss' | 'mist' | 'roots'; mist?: boolean; labels?: { x: number; y: number; text: string; when?: Cond }[]; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
+  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss' | 'mist' | 'roots' | 'echo'; mist?: boolean; labels?: { x: number; y: number; text: string; when?: Cond }[]; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
 }

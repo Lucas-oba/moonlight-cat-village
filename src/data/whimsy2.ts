@@ -52,7 +52,7 @@ STICKERS.flipmush_talk = '倒立菇（對話）'; STICKERS.flipmush_defeat = '�
 
 // ---------- 魔物（自創、可以對話；數值用 sim/ 模擬器調整） ----------
 ENEMIES.teasnail = {
-  id: 'teasnail', name: '茶杯蝸牛', sprite: 'teasnail', hp: 24, atk: 6, def: 4, spd: 2, exp: 18, money: 9, sticker: 'teasnail',
+  id: 'teasnail', mood: 'scared', weak: '茶杯把手', name: '茶杯蝸牛', sprite: 'teasnail', hp: 24, atk: 6, def: 4, spd: 2, exp: 18, money: 9, sticker: 'teasnail',
   talkBase: 0.55, talkLines: ['呼～一起喝杯茶，慢慢來就好……我先走囉。', '妳說話好溫柔，跟熱茶一樣暖暖的。拜拜～'],
   talkFail: ['……（茶杯蝸牛慢慢喝了一口茶，還沒聽完）', '咕嘟咕嘟……（牠縮進杯子裡了）'],
   gifts: [{ item: 'tea_leaf', chance: 0.6 }],
@@ -60,7 +60,7 @@ ENEMIES.teasnail = {
   skills: [{ id: 'teaspray', name: '噴熱茶', chance: 0.25, power: 1.1 }, { id: 'sleepytea', name: '請喝睏睏茶', chance: 0.12, power: 0.3, status: 'sleep' }],
 };
 ENEMIES.flipmush = {
-  id: 'flipmush', name: '倒立菇', sprite: 'flipmush', hp: 30, atk: 8, def: 3, spd: 6, exp: 24, money: 11, sticker: 'flipmush',
+  id: 'flipmush', mood: 'lonely', weak: '倒著長的菇傘', name: '倒立菇', sprite: 'flipmush', hp: 30, atk: 8, def: 3, spd: 6, exp: 24, money: 11, sticker: 'flipmush',
   talkBase: 0.45, talkLines: ['倒過來看，天空在腳下喔！妳也試試看～', '嘿嘿，妳不覺得頭暈嗎？那妳很厲害！再見～'],
   talkFail: ['咕嚕咕嚕轉～（倒立菇轉圈圈，沒在聽）', '？？（牠倒著看妳，好像看不懂）'],
   gifts: [{ item: 'forest_mushroom', chance: 0.5 }, { item: 'flip_fruit', chance: 0.15 }],

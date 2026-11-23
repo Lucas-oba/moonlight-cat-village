@@ -9,9 +9,15 @@ import './data/whimsy2';
 import './data/ch2_systems';
 import './data/ch2_main';
 import './data/ch2_side';
+import './data/hearts_content';
+import './data/ch2_echo';
+import './data/ch2_finale';
+import './data/ch2_bonds';
+import './data/ch2_remaining_sides';
+import { isChapter2Map } from './core/hearts';
 import { MIST_ENTRANCE, ROOT_REST } from './data/ch2_maps';
 import { G } from './core/game';
-import { loadGame, healAll } from './core/state';
+import { loadGame, healAll, saveGame } from './core/state';
 import { Hud, DialogueBox, makeHooks, titleScreen, prologue, A, openSystemPanel } from './ui/ui';
 import { WorldScene } from './scenes/World';
 import { BattleScene, type BattleResult } from './scenes/Battle';
@@ -30,6 +36,8 @@ const IMAGES = ['teasnail', 'flipmush', 'w_teatable', 'w_teapot', 'w_ftree', 'w_
   'rock_boss', 'rock_map', 'rock_big', 'wolf', 'mushroom', 'bat', 'forestbg', 'ftree', 'glowshroom', 'tent', 'campfire', 'log', 'veggies', 'lantern_off', 'lantern_on', 'cabbage', 'sign', 'gate', 'stump', 'inn', 'elderhouse', 'fountain', 'tree', 'fence', 'fishrack', 'stall', 'hay', 'flowerpot', 'dummy', 'lamp', 'battlebg',
   'cotton', 'cotton_big', 'toast', 'toast_big', 'charcoal', 'charcoal_big', 'nori', 'nori_big', 'weaver', 'weaver_big', 'lei', 'lei_big', 'afu', 'afu_big', 'mailbox', 'box', 'letter', 'flowershop', 'smithy', 'weaveshop', 'belltower', 'windmill',
   'pudding', 'pudding_big', 'mistpuff', 'thornling', 'cryshroom', 'mistwolf', 'yarnweasel', 'mistbg',
+  'manman', 'manman_big', 'echobat', 'mossrock', 'c2_softmoss', 'c2_sleepflower', 'c2_boat', 'c2_rootwall', 'echobg',
+  'denbg', 'mossantler_boss', 'sighvine_boss', 'mossantler_calm', 'c2_thorn', 'c2_seed', 'c2_cake', 'c2_birdhouse', 'c2_ending',
   'pengpeng', 'pengpeng_big', 'squirrelkid', 'mossantler_map',
   'c2_bigtree', 'c2_house_broken', 'c2_house_fixed', 'c2_door', 'c2_vine', 'c2_net', 'c2_mosslog',
   'c2_cloudline', 'c2_lamp_off', 'c2_lamp_on', 'c2_planks', 'c2_footprint',
@@ -65,7 +73,14 @@ async function start(game: Phaser.Game) {
   G.battleHook = (id, fixed) => runBattle(game, id, fixed);
   const qs = new URLSearchParams(location.search);
   const choice = qs.has('debug') && qs.has('skip') ? 'skip' : await titleScreen();
-  if (choice === 'continue') { const s = loadGame(); if (s) G.load(s); }
+  if (choice === 'continue') {
+    const save = loadGame();
+    if (save) {
+      G.load(save.state);
+      saveGame(G.s);
+      if (save.kindBonus) G.ui.toast({ title: `做過的溫柔的事，都記在心裡了喵！善良值 +${save.kindBonus}`, text: '' });
+    }
+  }
   else if (choice === 'skip') G.newGame('小葵');
   else { const name = await prologue(dlg); G.newGame(name); }
   hud.setVisible(true); hud.refresh();
@@ -74,16 +89,15 @@ async function start(game: Phaser.Game) {
 
 async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise<BattleResult> {
   const world = game.scene.getScene('World') as WorldScene;
-  if (fixed && FIXED[id]?.intro) await G.run(FIXED[id].intro!);
   G.busy++;
-  sfx.encounter(); music.play(fixed && FIXED[id]?.music === 'boss' ? 'boss' : 'battle');
+  if (fixed && FIXED[id]?.intro) await G.run(FIXED[id].intro!);
+  sfx.encounter(); music.play(fixed ? FIXED[id]?.music ?? 'battle' : 'battle');
   world.cameras.main.flash(250, 255, 255, 255);
   await new Promise(r => setTimeout(r, 300));
   hud.setVisible(false);
   game.scene.sleep('World');
   const result = await new Promise<BattleResult>(res => game.scene.run('Battle', { enc: id, fixed, resolve: res }));
   game.scene.stop('Battle');
-  G.busy--;
   if (result === 'lose' && fixed && FIXED[id]?.practice) {
     // 練習對打：輸了也不扣錢、不送回村子
     healAll(G.s); game.scene.wake('World'); G.ui.toast({ title: '練習結束', text: '輸了也沒關係！HP 都回復了。' });
@@ -92,7 +106,7 @@ async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise
     s.money -= lost; const cLost = 0; s.stats.lost++; // 勇氣不扣（避免越輸越難）
     // 在黑森林、而且營火已經點起來：回到營火旁；不然回村莊
     const camp = s.map === 'forest' && s.quests.main10?.status === 'done';
-    const inChapter2 = s.map === 'mistpath' || s.map === 'rootvillage';
+    const inChapter2 = isChapter2Map(s.map);
     const rootRest = s.quests.c2m4?.status === 'done';
     const rescue = inChapter2
       ? { map: rootRest ? 'rootvillage' : 'mistpath', ...(rootRest ? ROOT_REST : MIST_ENTRANCE) }
@@ -114,6 +128,8 @@ async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise
   }
   hud.setVisible(true); hud.refresh(); world.refreshWorld();
   music.play(MAPS[G.s.map]?.music ?? 'village');
+  G.busy--;
+  void G.drain();
   return result;
 }
 
