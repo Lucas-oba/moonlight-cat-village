@@ -2,7 +2,7 @@ import type { EnemyDef, EncounterTable, FixedEncounter } from './types';
 // 第一章敵人（數值皆暫定）
 export const ENEMIES: Record<string, EnemyDef> = {
   slime: {
-    id: 'slime', name: '史萊姆', sprite: 'slime', hp: 16, atk: 5, def: 1, spd: 4, exp: 10, money: 6,
+    id: 'slime', mood: 'lonely', weak: '柔軟的肚子', name: '史萊姆', sprite: 'slime', hp: 16, atk: 5, def: 1, spd: 4, exp: 10, money: 6,
     talkBase: 0.4,
     talkLines: ['噗嚕？妳身上有太陽的味道……我要去樹蔭睡覺了。', '噗嚕噗嚕～妳講話好溫柔喔。那我不撞妳了，拜拜～', '噗……其實我也不想打架。我去小溪邊泡泡水好了。'],
     talkFail: ['噗嚕噗嚕！（史萊姆好像沒在聽……）', '噗嚕？（史萊姆歪著頭，還是想撞人）'],
@@ -11,14 +11,14 @@ export const ENEMIES: Record<string, EnemyDef> = {
     skills: [{ id: 'sticky', name: '黏黏衝撞', chance: 0.3, power: 1.0, status: 'sticky' }],
   },
   gugu: {
-    id: 'gugu', name: '哥布林咕咕', sprite: 'goblin', hp: 26, atk: 6, def: 2, spd: 6, exp: 30, money: 0, sticker: 'goblin',
+    id: 'gugu', mood: 'hungry', weak: '抱著菜的手', name: '哥布林咕咕', sprite: 'goblin', hp: 26, atk: 6, def: 2, spd: 6, exp: 30, money: 0, sticker: 'goblin',
     likesFood: true,
     talkBase: 0.55, talkLines: ['……因為肚子好餓。'], talkFail: ['不、不要過來！（咕咕抱緊高麗菜，嚇得發抖）', '咕、咕咕！我不聽我不聽！'],
     gifts: [],
     skills: [{ id: 'stick', name: '小木棒亂揮', chance: 0.35, power: 1.1 }],
   },
   goblin: {
-    id: 'goblin', name: '哥布林', sprite: 'goblin', hp: 22, atk: 7, def: 2, spd: 7, exp: 18, money: 10, sticker: 'goblin',
+    id: 'goblin', mood: 'hungry', weak: '小木棒', name: '哥布林', sprite: 'goblin', hp: 22, atk: 7, def: 2, spd: 7, exp: 18, money: 10, sticker: 'goblin',
     likesFood: true,
     talkBase: 0.45, talkLines: ['肚子好餓……好啦好啦，我不拿了啦。', '咕咕……妳好像不是壞人。我先走了！'],
     talkFail: ['咕！我才不怕妳！', '咕嘰嘰～（哥布林做了一個鬼臉）'],
@@ -27,7 +27,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     skills: [{ id: 'steal', name: '偷偷拿', chance: 0.25, power: 0, steal: true }],
   },
   fgoblin: {
-    id: 'fgoblin', name: '森林哥布林', sprite: 'fgoblin_b', hp: 26, atk: 8, def: 3, spd: 7, exp: 22, money: 12, sticker: 'fgoblin',
+    id: 'fgoblin', mood: 'scared', weak: '葉子棒', name: '森林哥布林', sprite: 'fgoblin_b', hp: 26, atk: 8, def: 3, spd: 7, exp: 22, money: 12, sticker: 'fgoblin',
     likesFood: true,
     talkBase: 0.35, talkBonus: { when: { questDone: 'main9' }, add: 0.35 },
     talkLines: ['妳就是救了小豆芽的人類？……我們走啦，謝謝妳。', '咕……妳的眼睛好溫柔。好啦，不打了。'],
@@ -37,7 +37,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     skills: [{ id: 'leafstick', name: '葉子棒敲敲', chance: 0.3, power: 1.2 }],
   },
   wolf: {
-    id: 'wolf', name: '森林野狼', sprite: 'wolf', hp: 34, atk: 10, def: 3, spd: 8, exp: 30, money: 14, sticker: 'wolf',
+    id: 'wolf', mood: 'hungry', weak: '前腳', name: '森林野狼', sprite: 'wolf', hp: 34, atk: 10, def: 3, spd: 8, exp: 30, money: 14, sticker: 'wolf',
     likesFood: true,
     talkBase: 0.3, talkLines: ['嗚……我們只是肚子餓。', '嗷嗚……妳不怕我們？好吧，我們回去了。'],
     talkFail: ['嗷嗚——！（野狼露出牙齒）', '嗚嚕嚕……（野狼還是很兇）'],
@@ -45,14 +45,14 @@ export const ENEMIES: Record<string, EnemyDef> = {
     skills: [{ id: 'bite', name: '大口咬', chance: 0.25, power: 1.3 }, { id: 'howl', name: '嗷嗚呼叫', chance: 0.15, power: 0, call: true }],
   },
   mushroom: {
-    id: 'mushroom', name: '蘑菇怪', sprite: 'mushroom', hp: 28, atk: 7, def: 3, spd: 3, exp: 22, money: 10, sticker: 'mushroom',
+    id: 'mushroom', mood: 'lonely', weak: '大菇傘', name: '蘑菇怪', sprite: 'mushroom', hp: 28, atk: 7, def: 3, spd: 3, exp: 22, money: 10, sticker: 'mushroom',
     talkBase: 0.45, talkLines: ['好睏……不要吵……我去旁邊睡……', '呼……妳說話好小聲，好舒服……晚安……'],
     talkFail: ['嗯？……（蘑菇怪打了一個大哈欠，沒在聽）', '……呼嚕……（牠好像睡著了又醒來）'],
     gifts: [{ item: 'forest_mushroom', chance: 0.7 }],
     skills: [{ id: 'spore', name: '睡睡孢子', chance: 0.3, power: 0.5, status: 'sleep' }],
   },
   bat: {
-    id: 'bat', name: '蝙蝠怪', sprite: 'bat', hp: 18, atk: 7, def: 1, spd: 11, exp: 16, money: 8, sticker: 'bat',
+    id: 'bat', mood: 'lonely', weak: '翅膀尖', name: '蝙蝠怪', sprite: 'bat', hp: 18, atk: 7, def: 1, spd: 11, exp: 16, money: 8, sticker: 'bat',
     talkBase: 0.5, talkLines: ['森林裡變得好暗，我們也想搬家了。', '妳聽得懂我們唱歌嗎？好開心！拜拜～'],
     talkFail: ['吱吱吱！（蝙蝠怪飛來飛去，聽不到）', '吱？（蝙蝠怪轉了一圈）'],
     gifts: [],
@@ -60,7 +60,7 @@ export const ENEMIES: Record<string, EnemyDef> = {
     skills: [{ id: 'flap', name: '翅膀拍拍', chance: 0.3, power: 0.9 }],
   },
   rock: {
-    id: 'rock', name: '巨岩', sprite: 'rock_boss', hp: 300, atk: 21, def: 4, spd: 3, exp: 0, money: 0, sticker: 'rock',
+    id: 'rock', mood: 'scared', weak: '握著樹幹的手', name: '巨岩', sprite: 'rock_boss', hp: 300, atk: 21, def: 4, spd: 3, exp: 0, money: 0, sticker: 'rock',
     talkBase: 0, talkLines: [], talkFail: [], gifts: [],
     skills: [
       { id: 'sweep', name: '大樹幹橫掃', chance: 0.28, power: 0.8, target: 'all' },
@@ -98,7 +98,7 @@ export const FIXED: Record<string, FixedEncounter> = {
   tut1: { id: 'tut1', enemies: ['slime'], bg: 'battlebg', event: ['main6', 'tutorial'], intro: 'tut1_intro',
     hint: '點「攻擊」打史萊姆！被打痛了可以「防禦」，或用「道具」吃餅乾喵！' },
   tut2: { id: 'tut2', enemies: ['slime', 'slime'], bg: 'battlebg', event: ['main6', 'tutorial'], intro: 'tut2_intro',
-    hint: '試試看「技能」：初級戰士的「勇氣揮擊」，威力比較大喵！' },
+    hint: '試試看「技能」：初期勇士的「勇氣揮擊」，威力比較大喵！' },
   tut3: { id: 'tut3', enemies: ['slime'], bg: 'battlebg', event: ['main6', 'tutorial'], intro: 'tut3_intro', forceTalk: true, talkScript: 'tut3_talk',
     hint: '這隻史萊姆看起來好睏……試試看「對話」喵！' },
   gugu: { id: 'gugu', enemies: ['gugu'], bg: 'battlebg', talkFlag: 'gugu_talked', talkScript: 'gugu_talk', talkBonus: 0.2,

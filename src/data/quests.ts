@@ -19,7 +19,7 @@ export const QUESTS: Record<string, QuestDef> = {
       { id: 'guard', type: 'event', text: '去北邊的訓練場，找橘貓守衛', marker: ['guard'] },
       { id: 'system', type: 'event', text: '打開「屬性」，看看自己' },
     ],
-    rewards: { items: [{ id: 'wooden_sword', n: 1 }], courage: 1 }, rewardText: ['小木劍', '職業「初級戰士」', '能力「聽懂貓語」'], unlocks: ['main4'],
+    rewards: { items: [{ id: 'wooden_sword', n: 1 }], courage: 1 }, rewardText: ['小木劍', '職業「初期勇士」', '能力「聽懂貓語」'], unlocks: ['main4'],
   },
   main4: {
     id: 'main4', kind: 'main', no: 4, title: '長老的故事', summary: '我聽得懂貓咪說話了！長老有話要跟我說。',
