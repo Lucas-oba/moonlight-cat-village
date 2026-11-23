@@ -1,7 +1,7 @@
 import { QUESTS } from '../data/quests';
 import type { QuestDef, Reward } from '../data/types';
 import type { GameState } from './state';
-import { addExp, bondOf } from './state';
+import { addExp, bondOf, equipBetterWeapon } from './state';
 import { bus } from './bus';
 import { ITEMS } from '../data/items';
 
@@ -17,6 +17,9 @@ export function refreshAvailability(s: GameState) {
       s.quests[def.id] = { status: 'available', prog: {}, seen: {} };
       if (def.autoStart) startQuest(s, def.id);
     }
+  }
+  for (const def of Object.values(QUESTS)) {
+    if (def.autoStartAfter && s.quests[def.autoStartAfter]?.status === 'done' && s.quests[def.id]?.status === 'available') startQuest(s, def.id);
   }
 }
 export function startQuest(s: GameState, id: string) {
@@ -66,7 +69,7 @@ export function grantReward(s: GameState, r: Reward): string[] {
   const out: string[] = [];
   if (r.exp) { out.push(`${r.exp} EXP`); const ups = addExp(s, r.exp); ups.forEach(u => out.push(`🎉 升到 Lv ${u.lv}！HP、MP 全部回復`)); }
   if (r.money) { s.money += r.money; out.push(`${r.money} 魚乾幣`); }
-  for (const it of r.items ?? []) { s.inventory[it.id] = (s.inventory[it.id] ?? 0) + it.n; if (ITEMS[it.id].kind === 'weapon') s.weapon = it.id; out.push(`${ITEMS[it.id].name} ×${it.n}`); }
+  for (const it of r.items ?? []) { s.inventory[it.id] = (s.inventory[it.id] ?? 0) + it.n; equipBetterWeapon(s, it.id); out.push(`${ITEMS[it.id].name} ×${it.n}`); }
   if (r.courage) { s.courage += r.courage; out.push(`勇氣值 +${r.courage}`); }
   if (r.observation) { s.observation += r.observation; out.push(`觀察力 +${r.observation}`); }
   for (const f of r.flags ?? []) s.flags[f] = true;
