@@ -33,6 +33,12 @@ async function settle({ choices = [], stopOn } = {}) {
       idle = 0;
       continue;
     }
+    const closePanel = page.locator('.sys-head .x');
+    if (await closePanel.isVisible()) {
+      await closePanel.tap();
+      idle = 0;
+      continue;
+    }
     const quizNext = page.locator('.quiz .qz-next');
     const answer = page.locator('.quiz .qz-btn:not([disabled])').first();
     if (await quizNext.isVisible() || await answer.isVisible()) {
@@ -40,11 +46,13 @@ async function settle({ choices = [], stopOn } = {}) {
       idle = 0;
       continue;
     }
-    const buttons = dialogue.locator('.choices button');
+    const buttons = dialogue.locator('.choices button:not(.locked)');
     if (await buttons.first().isVisible()) {
       if (await stopOn?.()) return texts;
-      const wanted = choices.shift();
-      await (wanted ? buttons.filter({ hasText: wanted }) : buttons.first()).tap();
+      const wanted = choices[0] && buttons.filter({ hasText: choices[0] });
+      const matched = wanted && await wanted.count();
+      if (matched) choices.shift();
+      await (matched ? wanted.first() : buttons.first()).tap();
       idle = 0;
       continue;
     }
@@ -100,7 +108,7 @@ async function step(col, row, key, stop) {
 
 const dialogueUp = () => !!document.querySelector('.dlg:not(.hidden)');
 const saveData = () => withGame(() => ({
-  kindness: window.__mcv.G.s.kindness,
+  kindCh2: window.__mcv.G.s.kindCh2,
   shares: window.__mcv.G.s.stats.shares,
   food: window.__mcv.G.s.inventory.sweet_potato,
 }));
@@ -121,7 +129,7 @@ try {
     Object.assign(save.inventory, { wooden_sword: 1, sticker_book: 1, cookie: 5, herb_tea: 2 });
     save.stickers = ['moon_paw', 'forest_view', 'moon_feast'];
     save.flags.catSpeech = save.flags.system = true;
-    delete save.kindness;
+    for (const key of ['kindness', 'kindCh2', 'kindAwarded', 'befriended', 'journal', 'titleTier']) delete save[key];
     delete save.stats.shares;
     localStorage.setItem('mcv_save_v1', JSON.stringify(save));
   });
@@ -134,6 +142,7 @@ try {
     const random = Math.random;
     Math.random = () => 0.25 + random() * 0.5;
   });
+  await settle();
   assert(await tapNpc(page, 'rock'));
   await page.getByText('小豆芽在裡頭？好！我來推！').waitFor();
   await settle();
@@ -173,7 +182,7 @@ try {
   await page.locator('.battle-ui').waitFor({ state: 'detached', timeout: 15000 });
   await settle();
   await finish('c2m2');
-  assert.deepEqual(await saveData(), { kindness: 3, shares: 2, food: 1 });
+  assert.deepEqual(await saveData(), { kindCh2: 3, shares: 2, food: 1 });
   assert(await withGame(() => window.__mcv.G.world.npcs.some(n => n.def.id === 'c2_mist_guide')));
 
   await at(9, 25);
@@ -254,7 +263,7 @@ try {
   assert.equal(await litVillageLamps(), 3);
   await at(10, 19);
   await shot('c2_08_reunion');
-  assert.deepEqual(await saveData(), { kindness: 11, shares: 2, food: 1 });
+  assert.deepEqual(await saveData(), { kindCh2: 11, shares: 2, food: 1 });
   assert.equal(await withGame(() => window.__mcv.G.s.quests.side14?.status === 'done'), false);
   await page.locator('.sys-btn').tap();
   await page.locator('.sys-tabs').getByRole('button', { name: '任務' }).tap();
@@ -283,7 +292,7 @@ try {
       const world = window.__mcv.G.world;
       const target = (kind === 'npc' ? world.npcs : world.glints).find(entry => entry.def.id === id);
       if (!target || world.distTo({ kind, ...target }) >= 60) throw new Error(`未走到 ${id} 身旁`);
-      void world.doInteract({ kind, ...target });
+      void world.doInteract({ kind, def: target.def, spr: target.spr });
     }, [kind, id]);
     await settle(options);
   }
