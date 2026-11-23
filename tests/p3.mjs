@@ -1,6 +1,6 @@
 import fs from 'fs';
 import { launch, shot, sleep, advance, state, tapTo, tapNpc, tapGlint, joystick, battle, inBattle } from './lib.mjs';
-const { browser, page, errors } = await launch('http://localhost:4173/?debug=1');
+const { browser, page, errors } = await launch((process.env.URL || 'http://localhost:4173/') + '?debug=1');
 await page.evaluate(s => localStorage.setItem('mcv_save_v1', s), fs.readFileSync('/tmp/ckpt_main5.json', 'utf8'));
 await page.reload(); await sleep(2500);
 await shot(page, '16_title_continue');
@@ -37,4 +37,7 @@ for (let k = 0; k < 4; k++) { try { await tapGlint(page, 'douhua_hide'); await a
 await q('douhua found');
 fs.writeFileSync('/tmp/ckpt_found.json', await page.evaluate(() => { const G = window.__mcv.G; return JSON.stringify(Object.assign({}, G.s, G.world.playerPos())); }));
 console.log('errors', errors);
+const passed = !errors.length && (await state(page)).quests.main6.startsWith('done');
+console.log('RESULT', passed ? 'PASS' : 'FAIL');
+process.exitCode = passed ? 0 : 1;
 await browser.close();

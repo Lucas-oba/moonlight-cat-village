@@ -56,7 +56,7 @@ async function resolve() {
     if (await vis('.activate')) { await sleep(3500); await page.click('.activate'); await sleep(300); idle = 0; continue; }
     if (await vis('.sys-wrap')) { log.push('[PANEL] ' + ((await page.textContent('.sys-head').catch(() => '')) || '').slice(0, 30)); await sleep(300); await page.evaluate(() => [...document.querySelectorAll('.sys-head .x')].forEach(b => b.click())); await sleep(300); idle = 0; continue; }
     if (await vis('.dlg')) {
-      const btns = await page.$$('.dlg .choices button');
+      const btns = await page.$$('.dlg .choices button:not(.locked)');
       if (btns.length) {
         const texts = await Promise.all(btns.map(b => b.textContent())); const key = texts.join('|');
         const good = texts.map((t, k) => k).filter(k => !/等一下|不用|還沒|先不要|下次/.test(texts[k]));
@@ -89,12 +89,29 @@ async function cands(q, newFlags) {
     if (curO?.id === 'tutorial') out.push({ k: 'grass', id: 'tutorial', d: 'grass', m: 5 });
     if (curO?.type === 'battle' && (curO.targets || []).some(m => window.__mcv.MAPS[m]?.encounter)) out.push({ k: 'grass', id: 'fight_' + curO.targets[0], map: curO.targets[0], d: 'grass', m: 4 });
     for (const n of NPCS) {
-      const r = n.talk.find(r => check(s, r.when)); if (!r) continue; const m = (curT.includes(n.id) || curO?.marker?.includes(n.id) ? 3 : 0) || ment(r.d, r.when) || (n.id === giver ? 0.5 : 0); if (!m) continue;
-      if (n.follow && check(s, n.follow)) { out.push({ k: 'follow', id: n.id, d: r.d, m }); continue; }
-      const sp = (n.spots || []).find(sp => check(s, sp.when)); if (!sp || sp.hidden) continue;
-      out.push({ k: 'npc', id: n.id, map: sp.map, x: sp.x, y: sp.y, d: r.d, m });
+      const score = r => r ? (curT.includes(n.id) || curO?.marker?.includes(n.id) ? 3 : 0)
+        || ment(r.d, r.when) || (n.id === giver ? 0.5 : 0) : 0;
+      if (n.follow && check(s, n.follow)) {
+        const r = n.talk.find(r => check(s, r.when));
+        const m = score(r);
+        if (m) out.push({ k: 'follow', id: n.id, d: r.d, m });
+      }
+      for (const map of new Set(n.spots.map(sp => sp.map))) {
+        const local = map === s.map ? s : { ...s, map };
+        if (n.follow && check(local, n.follow)) continue;
+        const sp = n.spots.find(sp => check(local, sp.when));
+        if (sp?.map !== map || sp.hidden) continue;
+        const r = n.talk.find(r => check(local, r.when));
+        const m = score(r);
+        if (m) out.push({ k: 'npc', id: n.id, map, x: sp.x, y: sp.y, d: r.d, m });
+      }
     }
-    for (const g of GLINTS) { if (g.once && s.flags[g.once]) continue; if (!check(s, g.when)) continue; const m = curO?.targets?.includes(g.id) ? 3 : ment(g.d, g.when); if (m) out.push({ k: 'glint', id: g.id, map: g.map, x: g.x, y: g.y, obs: g.obs, d: g.d, m, need: g.needSize }); }
+    for (const g of GLINTS) {
+      if (g.once && s.flags[g.once]) continue;
+      if (!check(g.map === s.map ? s : { ...s, map: g.map }, g.when)) continue;
+      const m = curO?.targets?.includes(g.id) || curO?.marker?.includes(g.id) ? 3 : ment(g.d, g.when);
+      if (m) out.push({ k: 'glint', id: g.id, map: g.map, x: g.x, y: g.y, obs: g.obs, d: g.d, m, need: g.needSize });
+    }
     for (const t of TRIGGERS) { if (s.flags[t.once] || !check(s, t.when)) continue; const m = ment(t.d, t.when); if (m) out.push({ k: 'trig', id: t.id, map: t.map, zone: t.zone, d: t.d, m }); }
     return out.sort((a, b) => (b.m - a.m) || (Number(b.k === 'trig') - Number(a.k === 'trig')));
   }, [q, newFlags]);
@@ -108,9 +125,19 @@ async function act(c) {
     await sleep(650); await quiet(); await page.evaluate(() => window.__mcv.G.world.checkTriggers()); await sleep(500); return 'trig';
   }
   if (c.k !== 'follow') { await page.evaluate(c => window.__mcv.G.world.placePlayer(c.map, c.x, c.y + 34, 0), c); await sleep(550); await quiet(); await resolve(); }
-  return page.evaluate(c => {
-    const w = window.__mcv.G.world;
-    if (c.k === 'glint' && c.need && window.__mcv.G.s.size !== c.need) { const wd = window.__mcv.WONDERS.find(x => x.map === c.map && x.mode === c.need); if (wd) { w.player.setPosition(wd.x, wd.y); w.useWonder(wd); w.player.setPosition(c.x, c.y + 34); } }
+  return page.evaluate(async c => {
+    const { G, WONDERS, check } = window.__mcv;
+    const w = G.world;
+    if (c.k === 'glint' && c.need && G.s.size !== c.need) {
+      const y = c.y + 34;
+      const circle = WONDERS.find(({ map, mode, area, when }) => map === c.map && mode === c.need &&
+        check(G.s, when) && c.x >= area.x && c.x <= area.x + area.w && y >= area.y && y <= area.y + area.h);
+      if (circle) {
+        w.player.setPosition(circle.x, circle.y);
+        await w.useWonder(circle);
+        w.player.setPosition(c.x, y);
+      }
+    }
     if (c.k === 'glint') { const g = w.glints.find(g => g.def.id === c.id); if (!g) return 'glint-hidden(obs ' + c.obs + ', have ' + window.__mcv.G.s.observation + ')'; w.doInteract({ kind: 'glint', def: g.def, spr: g.spr }); return 'ok'; }
     const n = [...w.npcs, ...w.followers].find(n => n.def.id === c.id); if (!n) return 'npc-missing'; w.doInteract({ kind: 'npc', def: n.def, spr: n.spr }); return 'ok';
   }, c);
