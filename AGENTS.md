@@ -24,7 +24,7 @@ git commit -m "還原二進位素材為真正的檔案，移除 binpack"
 - 《月光貓村》：給小朋友（國小三～五年級）玩的單人 2D 像素風 RPG。小朋友穿越到貓咪的異世界，一章學一種心意。
 - 技術：**Phaser 3 + TypeScript + Vite**，手機**直式 390×844**（觸控：虛擬搖桿＋點地面走路）。存檔用 `localStorage`。
 - 全 6 章，主題順序固定：**第一章 勇氣 → 第二章 善良 → 第三章 友誼 → 第四章 誠實與負責 → 第五章 愛 → 第六章 希望**（擁有者特別指定「先愛、最後希望」）。
-- 目前進度：**試玩版 0.8.2，第一章內容完整**（主線 1～12、支線 1～23、三位夥伴、巨岩王、貼紙簿、魔物圖鑑、房子內部、日夜、下雨、羈絆、服裝、兩段奇幻內容）。
+- 目前原始碼進度為**試玩版 0.11.0**。第一～三章內容完整。第三章「橋的另一頭」有 12 個主線、14 個支線、新夥伴米舟、朋友信與帆耳頭目戰。
 - 線上試玩：https://lucas-oba.github.io/moonlight-cat-village/
 - 每章大約 4～5 小時（第一章 3.5～4 小時），長度靠支線與探索，不靠練等。
 
@@ -88,6 +88,11 @@ src/
     quiz.ts            題庫（英數自）＋ quiz_zh.ts（國語）
     ch1c.ts / interiors.ts / bonds.ts / events.ts / whimsy.ts / whimsy2.ts
                        追加內容模組：它們「修改」上面的共用資料表（push / Object.assign）
+    ch3_maps.ts / ch3_enemies.ts / ch3_boss.ts     河岸三張地圖、一般遇敵、帆耳頭目戰
+    ch3_story.ts / ch3_finale.ts                   第三章主線、米舟招募與羈絆
+    ch3_collection.ts / ch3_sides.ts               河岸貼紙、夥伴與村民委託、奇幻支線
+    ch3_school.ts / quiz_ch3.ts                    第三章喵喵小學堂與四科題庫
+    letters.ts                                    朋友信與口信資料型別（介面在 ui/letters.ts）
 public/
   assets/              遊戲圖片（png/jpg）、BGM 與音效（mp3）
   fonts/huninn.woff2   字型子集（jf 粉圓，OFL）
@@ -102,7 +107,10 @@ docs/screenshots/      幾張代表性截圖
 DESIGN.md              世界觀與已確認的設計決定
 CHAPTER1.md            第一章完整企劃（v2，已核准）＋奇幻追加
 CH1_WHIMSY_PROPOSAL.md 第一章奇幻內容提案（已核准、已實作）
-SLICE1_NOTES.md        各版本實作紀錄（0.3～0.8.2）、BGM 對照表
+CHAPTERS3_6_PROPOSAL.md 第三～六章提案，先讀「✅ 已確認」
+docs/CH3_SPEC.md       第三章製作規格
+docs/QUIZ_CH3.md       第三章 40 題的逐題核對表
+SLICE1_NOTES.md        各版本實作紀錄、BGM 對照表
 ```
 
 ### 加內容的方式
@@ -135,6 +143,26 @@ URL=http://localhost:4173/ node tests/p18.mjs            # 奇幻 W1：鐘樓、
 - `npx tsx tests/chk_refs.ts`（或 esbuild 後執行）：檢查對話、NPC、任務之間的 id 參照。
 - 測試注意：在 `page.evaluate` 裡**不要回傳 `G.run(...)` 的 Promise**（會卡住），要包成 `{ G.run(...); }`。
 
+### 第三章回歸
+
+先跑 `timeout 600 npm run build`，再開一個 `npx vite preview --port 4173 --strictPort`。用完按 Ctrl+C 關閉預覽。另開終端機，依序執行下列指令；每次只開一個瀏覽器。
+
+```bash
+export URL=http://localhost:4173/
+for t in p28_stats4 p29_ch3a p30_ch3b p31_ch3_sides; do
+  result=0
+  timeout 600 node "tests/$t.mjs" || result=$?
+  pkill -f '[h]eadless_shell' || true
+  pkill -f '[c]hrome-headless' || true
+  [ "$result" -eq 0 ] || break
+done
+```
+
+- `p28_stats4` 驗證舊存檔、四種心意和朋友信。`p29_ch3a` 從 `ch2_done.json` 走完主線 1～6 與米舟招募。`p30_ch3b` 從 `ch3_m6.json` 走完主線 7～12、章末統計與日記。
+- `p31_ch3_sides` 從第三章存檔走完 14 個支線。存檔在 `tests/fixtures/`，截圖在 `docs/screenshots/ch3/`。`CH3_SCREENSHOTS` 可指定暫存截圖目錄。
+- 單跑支線可用 `URL=http://localhost:4173/ timeout 600 node tests/qsolve.mjs c3s3,c3s9`。指定第三章支線時，預設讀取 `ch3_done.json`。
+- 老夥伴的第 4 級與專屬技能由第二章羈絆任務解鎖。完成第三章羈絆支線可拿回憶貼紙，已到第 4 級的夥伴還會提起兩人一起做過的事。
+
 ## 6. 戰鬥模擬器與平衡目標
 
 ```bash
@@ -155,7 +183,7 @@ node sim/out/sim.mjs 1000 顛倒 --json sim/flippath_v08.json            # 存�
 
 ## 7. 打包單檔版與發佈
 
-GitHub Pages 上放的是「單檔版」：所有圖片、聲音、字型都用 data URI 塞進檔案裡。因為一次推太大的檔案 GitHub 會回 **413**，所以素材分裝成 `pack1.js`～`pack4.js`（每個約 3MB 以下）。
+GitHub Pages 上放的是「單檔版」：所有圖片、聲音、字型都用 data URI 塞進檔案裡。因為一次推太大的檔案 GitHub 會回 **413**，所以素材分裝成 pack1..N（目前 6 個），每個檔案約 3MB 以下。
 
 ```bash
 npm run build
@@ -169,7 +197,8 @@ node tests/smoke_single.mjs http://localhost:4180/
 2. 把 `single/` 裡**有變動的檔案**推到 `main` 分支根目錄，**再**推到 `gh-pages` 分支根目錄（兩個分支內容相同；一次推一個分支，不要同時）。`.nojekyll` 要保留。
 3. 約 1 分鐘後比對線上檔案的 hash：
    ```bash
-   for f in index.html pack1.js pack2.js pack3.js pack4.js; do
+   for path in single/index.html single/pack*.js; do
+     f=${path##*/}
      a=$(sha256sum single/$f | cut -c1-12); b=$(curl -s "https://lucas-oba.github.io/moonlight-cat-village/$f?v=$RANDOM" | sha256sum | cut -c1-12)
      echo "$f $a $b"; done
    node tests/smoke_single.mjs https://lucas-oba.github.io/moonlight-cat-village/
@@ -186,7 +215,7 @@ node tests/smoke_single.mjs http://localhost:4180/
 ## 9. 已知問題與未定事項
 
 - **沒有在真的手機上測過**（尤其 iPhone／iOS Safari 的聲音、觸控、效能），只用 Playwright 模擬手機測。
-- **字型子集缺字**：`public/fonts/huninn.woff2` 只有約 880 字，遊戲文字裡有約 700 多個字不在子集內，會用系統字型顯示（看起來字型不一致）。修法：`pip install fonttools brotli && python3 tools_font_subset.py`（需要 `art_src/huninn.ttf`），再建置、確認畫面。這屬於修正，可以直接做。
+- **字型子集**：0.11.0 已補入第三章用字。加台詞後先跑 `timeout 600 python3 tools_font_subset.py --check`。若有缺字，用 `python3 tools_font_subset.py` 從 `art_src/huninn.ttf` 重建，再檢查一次。
 - **新動物（圓圓、露露、捲捲）從哪裡來**：擁有者刻意還沒決定，台詞裡**不要解釋來歷**。
 - 服裝只改地圖上的外觀，戰鬥畫面不變。
-- 第二章（善良）尚未開始；開始前要先寫企劃（像 `CHAPTER1.md` 那樣）給擁有者確認。
+- 第四章「水輪少了一格」接在第三章後面。故事與機制的已確認範圍記在 `CHAPTERS3_6_PROPOSAL.md`。
