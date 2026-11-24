@@ -2,16 +2,30 @@
 // 用法：node tests/qsolve.mjs side3,side4,...
 import { readFileSync, writeFileSync } from 'node:fs';
 import { launch, sleep, shot, state, battle2, inBattle } from './lib.mjs';
+import { riverWalk } from './ch3_walk.mjs';
+import { isRiverSideQuest, solveRiverSide } from './ch3_side_walk.mjs';
 const LIST = (process.argv[2] || 'side3').split(',');
 const OBS = Number(process.env.OBS ?? 4);
-const { browser, page, errors } = await launch((process.env.URL || 'http://localhost:4173/') + '?debug=1&skip=1');
-page.setDefaultTimeout(4000);
-await sleep(2500);
-const checkpoint = process.env.CHECKPOINT;
+const checkpoint = process.env.CHECKPOINT ?? (!process.env.FRESH && LIST.every(isRiverSideQuest)
+  ? new URL('./fixtures/ch3_done.json', import.meta.url) : null);
+const riverCheckpoint = checkpoint && LIST.every(isRiverSideQuest);
+const url = new URL(process.env.URL || 'http://localhost:4173/');
+url.searchParams.set('debug', '1');
+if (!riverCheckpoint) url.searchParams.set('skip', '1');
+const { browser, page, errors } = await launch(url.href);
+page.setDefaultTimeout(riverCheckpoint ? 12000 : 4000);
 const progressionRun = !!process.env.FRESH || !!checkpoint;
 const OBSF = Number(process.env.OBS ?? 0);
+if (!riverCheckpoint) await sleep(2500);
 // CHECKPOINT=/tmp/ckpt_found.json 可接續 p2 → p3 的實際流程。
-if (checkpoint) {
+if (riverCheckpoint) {
+  // 從標題讀檔，才能讓目前場景和對話佇列一起從河岸開始。
+  await page.evaluate(save => localStorage.setItem('mcv_save_v1', save), readFileSync(checkpoint, 'utf8'));
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 45000 });
+  await page.getByRole('button', { name: /繼續遊戲/ }).tap();
+  await page.waitForFunction(() => !!window.__mcv.G.world?.player);
+  await riverWalk(page, 'qs').settle();
+} else if (checkpoint) {
   const save = JSON.parse(readFileSync(checkpoint, 'utf8'));
   await page.evaluate(save => {
     const { G } = window.__mcv;
@@ -145,6 +159,12 @@ async function act(c) {
 const report = {};
 for (const q of LIST) {
   const t0 = Date.now(); const f0 = await page.evaluate(() => Object.keys(window.__mcv.G.s.flags));
+  if (isRiverSideQuest(q)) {
+    await quiet();
+    const steps = await solveRiverSide(page, riverWalk(page, 'qs'), q);
+    await recordResult(q, steps, t0);
+    continue;
+  }
   if (progressionRun) await page.evaluate((OBSF) => { const s = window.__mcv.G.s; for (const m of Object.values(s.members)) if (m.lv < 7) m.lv = 7; s.bonds = { ali: 3, mint: 3, yuzu: 3, ...(s.bonds || {}) }; for (const k of ['ali', 'mint', 'yuzu']) s.bonds[k] = 3; if (OBSF) s.observation = Math.max(s.observation, OBSF); window.__mcv.G.exec({ type: 'rest' }); }, OBSF);
   let st = await page.evaluate(q => window.__mcv.G.s.quests[q]?.status, q); const steps = []; let fails = 0; const tried = new Map();
   console.log(`\n=== ${q} (${st})`);
@@ -165,7 +185,10 @@ for (const q of LIST) {
     console.log(`  [${c.k}] ${c.id} → ${c.d} (${r}) ${prog}`); log.forEach(t => console.log('     ', t));
     steps.push(`${c.k}:${c.id}`); if (r !== 'ok' && r !== 'trig') fails++;
   }
-  st = await page.evaluate(q => window.__mcv.G.s.quests[q]?.status, q);
+  await recordResult(q, steps, t0);
+}
+async function recordResult(q, steps, t0) {
+  const st = await page.evaluate(q => window.__mcv.G.s.quests[q]?.status, q);
   report[q] = { status: st, steps: steps.length, sec: Math.round((Date.now() - t0) / 1000) };
   console.log(`=== ${q} → ${st} in ${steps.length} steps`);
   await shot(page, `qs_${q}`);
