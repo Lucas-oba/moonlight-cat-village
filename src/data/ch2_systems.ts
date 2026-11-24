@@ -1,6 +1,6 @@
 import { MEMBERS } from './characters';
 import { ENEMIES } from './enemies';
-import { STICKERS, STICKER_PAGES, bookIds, chapter1Collection } from './items';
+import { STICKERS, STICKER_PAGES, bookIds, chapter1Collection, chapter2MonsterStickers } from './items';
 import type { EnemyDef } from './types';
 
 MEMBERS.pudding = {
@@ -75,4 +75,5 @@ for (const enemy of enemies) {
   STICKERS[talk] = `${enemy.name}（對話）`;
   STICKERS[defeat] = `${enemy.name}（打倒）`;
   monsterPage.ids.push(talk, defeat);
+  chapter2MonsterStickers.push(talk, defeat);
 }

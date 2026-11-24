@@ -1,6 +1,6 @@
 import { point } from './ch2_maps';
 import { ENCOUNTERS, ENEMIES } from './enemies';
-import { STICKERS, STICKER_PAGES } from './items';
+import { STICKERS, STICKER_PAGES, chapter2MonsterStickers } from './items';
 import { MAPS } from './maps';
 import type { EnemyDef } from './types';
 
@@ -76,6 +76,7 @@ for (const enemy of enemies) {
     const id = `${enemy.id}_${suffix}`;
     STICKERS[id] = `${enemy.name}（${label}）`;
     monsters.ids.push(id);
+    chapter2MonsterStickers.push(id);
   }
 }
 

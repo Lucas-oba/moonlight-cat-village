@@ -1,28 +1,43 @@
 import { MEMBERS, expToNext } from '../data/characters';
-import { newJournal, restoreHearts } from './hearts';
+import { chapterOf, newJournal, restoreHearts, type ChapterStat } from './hearts';
 import { ITEMS } from '../data/items';
+import type { SavedLetter } from '../data/letters';
 export interface MemberState { id: string; lv: number; exp: number; hp: number; mp: number; joined?: boolean; }
 export interface QuestState { status: 'available' | 'active' | 'done'; prog: Record<string, number>; seen: Record<string, string[]>; }
 export interface GameState {
+  friendship: number; honesty: number; love: number; hope: number;
   version: number; name: string; money: number; courage: number; kindness: number; observation: number;
   titleTier: number; kindCh2: number; kindAwarded: Record<string, boolean>; befriended: Record<string, number>;
   journal: Record<number, ReturnType<typeof newJournal>>;
   members: Record<string, MemberState>; party: string[]; inventory: Record<string, number>; weapon?: string;
+  letters: SavedLetter[];
   flags: Record<string, boolean>; quests: Record<string, QuestState>; tracked?: string;
   map: string; x: number; y: number; dir: number; time: 'day' | 'night'; stickers: string[];
   stats: { talkSuccess: number; shares: number; won: number; lost: number }; savedAt?: number;
-  guest?: string | null; titles?: string[]; chapterDone?: boolean; chapter2Done: boolean;
+  guest?: string | null; titles?: string[]; chapterDone?: boolean; chapter2Done: boolean; chapter3Done: boolean;
   quiz?: { seen: string[]; correct: number; wrong: number }; skills?: Record<string, string[]>; bonds?: Record<string, number>; size?: 'normal' | 'small' | 'big'; acc?: string[]; outfit?: string; lanterns?: string[]; seenEnemies?: string[]; weather?: 'rain' | 'clear'; bondWins?: Record<string, number>; feast?: boolean; day?: number;
 }
 export const SAVE_KEY = 'mcv_save_v1';
 export function newState(): GameState {
   return {
     version: 1, name: '小葵', money: 0, courage: 1, kindness: 0, observation: 1,
-    chapter2Done: false, titleTier: 0, kindCh2: 0, kindAwarded: {}, befriended: {}, journal: { 1: newJournal(), 2: newJournal() },
+    friendship: 0, honesty: 0, love: 0, hope: 0,
+    chapter2Done: false, chapter3Done: false, titleTier: 0, kindCh2: 0, kindAwarded: {}, befriended: {},
+    journal: Object.fromEntries([1, 2, 3, 4, 5, 6].map(chapter => [chapter, newJournal()])),
     members: { hero: { id: 'hero', lv: 1, exp: 0, hp: MEMBERS.hero.base.hp, mp: MEMBERS.hero.base.mp } },
     party: ['hero'], inventory: {}, flags: {}, quests: {}, map: 'village', x: 336, y: 936, dir: 1, time: 'night', stickers: [],
-    stats: { talkSuccess: 0, shares: 0, won: 0, lost: 0 },
+    letters: [], stats: { talkSuccess: 0, shares: 0, won: 0, lost: 0 },
   };
+}
+export function addStat(s: GameState, key: ChapterStat, n: number, event?: string) {
+  if (!Number.isFinite(n) || n <= 0) return false;
+  s[key] += n;
+  if (key === 'friendship') {
+    const page = s.journal[Math.max(3, chapterOf(s))];
+    page.friendship += n;
+    if (event && !page.friendshipEvents.includes(event)) page.friendshipEvents.push(event);
+  }
+  return true;
 }
 export function equipBetterWeapon(s: GameState, id: string): boolean {
   const next = ITEMS[id];
@@ -64,7 +79,8 @@ export function loadGame(): { state: GameState; kindBonus: number } | null {
     const state: GameState = {
       ...defaults, ...s, size: 'normal',
       stats: { ...defaults.stats, ...s.stats },
-      journal: { ...defaults.journal, ...s.journal },
+      journal: Object.fromEntries(Object.entries(defaults.journal).map(([chapter, page]) =>
+        [chapter, { ...page, ...s.journal?.[chapter] }])),
     };
     // 舊存檔有時只記下任務完成，沒有留下開門旗標。
     if (state.quests.main8?.status === 'done') state.flags.forest_open = true;
@@ -77,3 +93,10 @@ export function hasSave() { return !!localStorage.getItem(SAVE_KEY); }
 
 // 羈絆等級（第一章最高 3）：加入隊伍時是 1 級
 export function bondOf(s: GameState, id: string) { return s.bonds?.[id] ?? (s.members[id]?.joined ? 1 : 0); }
+
+export function availableSkills(s: GameState, id: string) {
+  const member = s.members[id];
+  return MEMBERS[id].skills.filter(skill =>
+    member.lv >= skill.learnLv && (!skill.minBond || bondOf(s, id) >= skill.minBond) &&
+    (!skill.quest || s.skills?.[id]?.includes(skill.id)));
+}
