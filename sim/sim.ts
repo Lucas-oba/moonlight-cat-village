@@ -1,7 +1,7 @@
 // 月光貓村 戰鬥模擬器：直接使用遊戲裡真正的 BattleScene 規則（只把畫面換成假的）
 (globalThis as any).setTimeout = (f: any) => { Promise.resolve().then(f); return 0; };
 (globalThis as any).clearTimeout = () => {};
-import { BattleScene } from '../src/scenes/Battle';
+import { BattleScene, CALM_MAX } from '../src/scenes/Battle';
 import { G } from '../src/core/game';
 import { newState, memberStats, addExp, healAll } from '../src/core/state';
 import { MEMBERS, expToNext } from '../src/data/characters';
@@ -14,7 +14,10 @@ import '../src/data/ch1c';
 import '../src/data/ch2_systems';
 import '../src/data/ch2_boss';
 import { ECHO, ECHO_ENCOUNTER } from '../src/data/ch2_echo_map';
+import { REED_ENCOUNTER, BRIDGE_ENCOUNTER } from '../src/data/ch3_enemies';
+import { FANER_ENCOUNTER } from '../src/data/ch3_boss';
 import { talkChance } from '../src/core/battle';
+import { CHAPTER_STATS, type ChapterStat } from '../src/core/hearts';
 import assert from 'node:assert/strict';
 
 // 試調數值：TUNE='{"ENEMIES":{"slime":{"atk":5}}}'
@@ -24,27 +27,47 @@ G.ui = { toast() {}, refresh() {}, dialogue: { hide() {}, show: async () => 0 } 
 (G as any).run = async () => true;
 
 type Policy = 'child' | 'smart';
-export interface Setup { lv: number; party: string[]; cookies: number; courage: number; enc: string; fixed: boolean; policy: Policy; stats?: boolean; legacy?: boolean; bond4?: boolean }
+const statKeys = Object.keys(CHAPTER_STATS) as ChapterStat[];
+type BattleStats = Record<ChapterStat, number>;
+function readNumberOption(key: string, fallback: number) {
+  const i = process.argv.indexOf('--' + key);
+  if (i === -1) return fallback;
+  const value = Number(process.argv[i + 1]);
+  assert(Number.isSafeInteger(value) && value >= 0, `--${key} 需要填 0 或正整數`);
+  return value;
+}
+const statOptions = Object.fromEntries(statKeys.map(key => [key, readNumberOption(key, 0)])) as BattleStats;
+export interface Setup extends Partial<BattleStats> { lv: number; party: string[]; cookies: number; courage: number; enc: string; fixed: boolean; policy: Policy; stats?: boolean; legacy?: boolean; bond4?: boolean }
 const bondSkills: Record<string, string> = {
   ali: 'split_guard', mint: 'forest_blessing', yuzu: 'quick_delivery', pudding: 'warm_blanket',
 };
 function setupState(su: Setup) {
   const s = newState(); s.name = '小葵'; s.courage = su.courage; s.weapon = 'wooden_sword';
+  for (const key of statKeys) s[key] = su[key] ?? 0;
   s.inventory = { cookie: su.cookies };
   if (su.enc === ECHO_ENCOUNTER || su.enc === 'c2_mossantler') s.map = ECHO;
+  if ([REED_ENCOUNTER, BRIDGE_ENCOUNTER, FANER_ENCOUNTER].includes(su.enc)) {
+    s.map = su.enc === REED_ENCOUNTER ? 'reedbeach' : 'knotbridge';
+    s.quests.c3m1 = { status: 'done', prog: {}, seen: {} };
+  }
   if (su.stats || su.legacy) {
     if (su.stats) s.observation = su.lv >= 5 ? Math.min(8, su.lv) : su.lv;
     s.kindness = su.lv >= 10 ? (su.stats ? 16 : 11) : su.stats && su.lv >= 5 ? 4 : 0;
     if (su.enc !== 'tut1') s.befriended = su.lv >= 10 ? { slime: 1, bat: 1, goblin: 1, ...(s.map === ECHO ? { mistpuff: 1, echobat: 1, mossrock: 1 } : {}) } : { slime: 1 };
   }
-  for (const id of su.party) { s.members[id] = { id, lv: id === 'hero' ? su.lv : Math.max(1, su.lv - 1), exp: 0, hp: 1, mp: 1, joined: id !== 'hero' }; }
+  G.s = s;
+  s.members.hero.lv = su.lv;
+  for (const id of su.party) {
+    G.ensureMember(id);
+    s.members[id].joined = id !== 'hero';
+  }
   if (su.bond4) {
     for (const id of su.party.filter(id => id in bondSkills)) {
       (s.bonds ??= {})[id] = 4;
       (s.skills ??= {})[id] = [bondSkills[id]];
     }
   }
-  s.party = [...su.party]; G.s = s; healAll(s);
+  s.party = [...su.party]; healAll(s);
 }
 function policyCmd(sc: any, a: any, policy: Policy, extra: boolean) {
   const s = G.s; const id = a.id; const m = s.members[id];
@@ -71,24 +94,25 @@ function policyCmd(sc: any, a: any, policy: Policy, extra: boolean) {
         ally.sticky || ally.stun || ally.sleep || ally.bindTurn >= sc.turn || ally.cryUntil >= sc.turn))) return useSkill();
     }
   }
-  if (sc.antlerBattle) {
-    if (sc.calm < 6) {
-      if (sc.vine.gone || (id === 'hero' && (sc.vine.hp <= sc.vine.def.hp / 2 || R < .30))) {
-        return { who: id, kind: 'talk', foe: sc.antler };
+  if (sc.antlerBattle || sc.fanerBattle) {
+    const { obstacle, creature } = sc;
+    if (sc.calm < CALM_MAX) {
+      if (obstacle.gone || (id === 'hero' && (obstacle.hp <= obstacle.def.hp / 2 || R < .30))) {
+        return { who: id, kind: 'talk', foe: creature };
       }
-      if (id === 'pudding' && R < .3) {
+      if (sc.antlerBattle && id === 'pudding' && R < .3) {
         const purr = MEMBERS.pudding.skills.find(k => k.kind === 'purr')!;
         if (m.mp >= purr.mp) return { who: id, kind: 'skill', skill: purr };
       }
-      if (policy === 'smart' && id === 'mint' && can('mint_heal')) {
-        return { who: id, kind: 'skill', skill: sk('mint_heal'), foe: sc.antler };
+      if (sc.antlerBattle && policy === 'smart' && id === 'mint' && can('mint_heal')) {
+        return { who: id, kind: 'skill', skill: sk('mint_heal'), foe: creature };
       }
     }
-    if (sc.vine.gone) return { who: id, kind: 'defend' };
+    if (obstacle.gone) return { who: id, kind: 'defend' };
     if (id === 'hero' && can('brave_slash') && (policy === 'smart' || R > .85)) {
-      return { who: id, kind: 'skill', skill: sk('brave_slash'), foe: sc.vine };
+      return { who: id, kind: 'skill', skill: sk('brave_slash'), foe: obstacle };
     }
-    return { who: id, kind: 'attack', foe: sc.vine };
+    return { who: id, kind: 'attack', foe: obstacle };
   }
   if (policy === 'child') {
     if (id === 'mint' && ratio(weakest) < 0.4 && can('mint_heal')) return { who: id, kind: 'skill', skill: sk('mint_heal'), ally: weakest };
@@ -120,6 +144,8 @@ function policyCmd(sc: any, a: any, policy: Policy, extra: boolean) {
 export async function runOne(su: Setup, keep = false) {
   if (!keep) setupState(su);
   const sc: any = new BattleScene();
+  sc.say = async () => {};
+  sc.renderParty = () => {};
   if (su.legacy) {
     const currentTalk = sc.talkCh.bind(sc);
     sc.talkCh = (f: any) => f.def.boss || sc.fx?.forceTalk ? currentTalk(f) :
@@ -127,12 +153,18 @@ export async function runOne(su: Setup, keep = false) {
     sc.tryHelper = async () => {};
   }
   sc.careForAntler = async () => {};
+  let caredForFaner = false;
+  sc.careForFaner = async () => { caredForFaner = true; };
   let timeout = false;
   sc.askCmd = async (a: any, extra = false) => {
     if (sc.turn > 40) { timeout = true; sc.foes.forEach((f: any) => { f.gone = true; f.how = 'flee'; }); return { who: a.id, kind: 'defend' }; }
     return policyCmd(sc, a, su.policy, extra);
   };
   const res: string = await new Promise(r => { sc.init({ enc: su.enc, fixed: su.fixed, resolve: r }); sc.create(); });
+  if (su.enc === FANER_ENCOUNTER && res === 'win' && !timeout) {
+    assert(caredForFaner && sc.obstacle.hp <= 0 && sc.calm === CALM_MAX, '橋索解開、帆耳平靜並進入照顧時間才能完成戰鬥');
+    assert.equal(sc.creature.hp, sc.creature.def.hp, '帆耳沒有受傷');
+  }
   const s = G.s;
   const hpLeft = s.party.reduce((t, id) => t + Math.max(0, s.members[id].hp) / memberStats(s, id).maxHp, 0) / s.party.length;
   const exp = sc.foes.filter((f: any) => f.how !== 'flee').reduce((t: number, f: any) => t + f.def.exp, 0);
@@ -145,7 +177,7 @@ export async function batch(su: Setup, n: number, startTrial?: (i: number) => vo
   return { max: tl[n - 1], win: win / n, lose: lose / n, timeout: to / n, turns: turns / n, p90: tl[Math.floor(n * 0.9)], hpLeft: hp / n, talk: talk / n, exp: exp / n, cookies: cookies / n };
 }
 // ---- 情境：第一章各地點，與「應有等級」 ----
-const P = { solo: ['hero'], ali: ['hero', 'ali'], mint: ['hero', 'mint'], full: ['hero', 'ali', 'mint'], yuzu: ['hero', 'ali', 'yuzu'], amy: ['hero', 'mint', 'yuzu'], puddingAli: ['hero', 'pudding', 'ali'], puddingMint: ['hero', 'pudding', 'mint'] };
+const P = { solo: ['hero'], ali: ['hero', 'ali'], mint: ['hero', 'mint'], full: ['hero', 'ali', 'mint'], yuzu: ['hero', 'ali', 'yuzu'], amy: ['hero', 'mint', 'yuzu'], puddingAli: ['hero', 'pudding', 'ali'], puddingMint: ['hero', 'pudding', 'mint'], mizhou: ['hero', 'mizhou'], mizhouYuzu: ['hero', 'mizhou', 'yuzu'], mizhouMint: ['hero', 'mizhou', 'mint'] };
 const CH2_SCENARIOS = ['mistpuff', 'thornling', 'cryshroom', 'mistwolf', 'yarnweasel'].map(id => {
   const enc = `sim_${id}`;
   FIXED[enc] = { id: enc, enemies: [id, id], bg: 'forestbg' };
@@ -156,6 +188,12 @@ const echoScenario: Scenario = { name: '迴聲谷', enc: ECHO_ENCOUNTER, fixed: 
   parties: ['full', 'yuzu', 'amy', 'puddingAli', 'puddingMint'], courage: 12, cookies: 3 };
 const antlerScenario: Scenario = { name: '苔角（第二章主線 11）', enc: 'c2_mossantler', fixed: true,
   lv: [13, 14, 15], parties: ['full', 'yuzu', 'amy', 'puddingAli', 'puddingMint'], courage: 12, cookies: 3 };
+const CH3_SCENARIOS: Scenario[] = [['蘆管灘', REED_ENCOUNTER], ['雙結橋', BRIDGE_ENCOUNTER]].map(([name, enc]) => ({
+  name, enc, fixed: false, lv: [16, 17, 18, 19, 20], parties: ['solo', 'mizhou', 'full', 'mizhouYuzu'], courage: 18, cookies: 3,
+}));
+const fanerScenario: Scenario = { name: '帆耳（第三章主線 10）', enc: FANER_ENCOUNTER, fixed: true, lv: [19, 20, 21],
+  parties: ['ali', 'mizhou', 'full', 'mizhouMint'], courage: 18, cookies: 3 };
+CH3_SCENARIOS.push(fanerScenario);
 export const SCENARIOS: Scenario[] = [
   { name: '草原（主線6後）', enc: 'meadow_grass', fixed: false, lv: [2, 3, 4], parties: ['solo', 'ali', 'mint'], courage: 3, cookies: 2 },
   { name: '咕咕（主線7）', enc: 'gugu', fixed: true, lv: [2, 3, 4], parties: ['solo', 'ali'], courage: 3, cookies: 2 },
@@ -176,6 +214,7 @@ export const SCENARIOS: Scenario[] = [
   { name: '顛倒小徑（主線8後）', enc: 'flip_grass', fixed: false, lv: [5, 6, 7], parties: ['ali', 'mint', 'full'], courage: 5, cookies: 3 },
   ...CH2_SCENARIOS, echoScenario, antlerScenario,
   { name: '巨岩（主線11）', enc: 'boss', fixed: true, lv: [5, 6, 7, 8], parties: ['ali', 'mint', 'full', 'yuzu', 'amy'], courage: 7, cookies: 3 },
+  ...CH3_SCENARIOS,
 ];
 async function main() {
   const N = +(process.argv[2] ?? 1000); const only = process.argv[3];
@@ -183,12 +222,20 @@ async function main() {
   const echo = only === '迴聲谷';
   const antler = only === '苔角';
   const ch2 = only === 'ch2' || echo || antler;
-  const policies: Policy[] = ch2 ? ['child'] : ['child', 'smart'];
-  for (const sc of echo ? [echoScenario] : antler ? [antlerScenario] : ch2 ? [...CH2_SCENARIOS, echoScenario, antlerScenario] : SCENARIOS) {
-    if (!ch2 && only && only !== 'all' && !sc.name.includes(only)) continue;
+  const faner = only === '帆耳';
+  const ch3 = only === 'ch3' || faner;
+  const chapterBatch = ch2 || ch3;
+  const policies: Policy[] = chapterBatch ? ['child'] : ['child', 'smart'];
+  const selected = faner ? [fanerScenario] : ch3 ? CH3_SCENARIOS : echo ? [echoScenario] : antler ? [antlerScenario]
+    : ch2 ? [...CH2_SCENARIOS, echoScenario, antlerScenario] : SCENARIOS;
+  const seed = readNumberOption('seed', -1);
+  const startTrial = seed < 0 ? undefined : (i: number) => { Math.random = seeded(seed + Math.imul(i + 1, 0x9e3779b9)); };
+  for (const sc of selected) {
+    if (!chapterBatch && only && only !== 'all' && !sc.name.includes(only)) continue;
+    const bond4 = sc === echoScenario || sc === antlerScenario;
     for (const lv of sc.lv) for (const p of sc.parties) for (const pol of policies) {
-      const r = await batch({ lv, party: P[p], cookies: sc.cookies, courage: sc.courage, enc: sc.enc, fixed: sc.fixed, policy: pol, stats: sc === echoScenario || sc === antlerScenario, bond4: sc === echoScenario || sc === antlerScenario }, sc.enc === 'boss' ? Math.min(N, 600) : N);
-      rows.push({ 情境: sc.name, ...(ch2 ? { 場次: N } : {}), lv, 隊伍: p, 玩家: pol, 勝率: (r.win * 100).toFixed(1) + '%', 卡住: (r.timeout * 100).toFixed(1) + '%', 回合: r.turns.toFixed(ch2 ? 2 : 1), p90回合: r.p90, 剩血: (r.hpLeft * 100).toFixed(ch2 ? 1 : 0) + '%', 對話結束: (r.talk * 100).toFixed(0) + '%', 餅乾: r.cookies.toFixed(2), EXP: r.exp.toFixed(0), 最多回合: r.max });
+      const r = await batch({ ...statOptions, lv, party: P[p], cookies: sc.cookies, courage: sc.courage, enc: sc.enc, fixed: sc.fixed, policy: pol, stats: bond4 || CH3_SCENARIOS.includes(sc), bond4 }, sc.enc === 'boss' ? Math.min(N, 600) : N, startTrial);
+      rows.push({ 情境: sc.name, ...(chapterBatch ? { 場次: N } : {}), ...(ch3 && seed >= 0 ? { seed } : {}), lv, 隊伍: p, 玩家: pol, ...statOptions, 勝率: (r.win * 100).toFixed(1) + '%', 卡住: (r.timeout * 100).toFixed(1) + '%', 回合: r.turns.toFixed(chapterBatch ? 2 : 1), p90回合: r.p90, 剩血: (r.hpLeft * 100).toFixed(chapterBatch ? 1 : 0) + '%', 對話結束: (r.talk * 100).toFixed(0) + '%', 餅乾: r.cookies.toFixed(2), EXP: r.exp.toFixed(0), 最多回合: r.max });
     }
   }
   console.table(rows);
@@ -218,6 +265,7 @@ export async function curve(kind: 'ali' | 'mint' | 'full', n: number) {
   const out: Record<string, { lv: number[]; enc: number[]; min: number[]; lose: number }> = {};
   for (let it = 0; it < n; it++) {
     const s = newState(); s.weapon = 'wooden_sword'; s.inventory = { cookie: 3 }; s.courage = 1;
+    Object.assign(s, statOptions);
     s.members.hero = { id: 'hero', lv: 1, exp: 0, hp: 1, mp: 1 } as any; s.party = ['hero']; G.s = s; healAll(s);
     let enc = 0, min = 0, lose = 0;
     const fight = async (e: string, fixed: boolean) => {
@@ -242,11 +290,12 @@ export async function curve(kind: 'ali' | 'mint' | 'full', n: number) {
   }
   const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
   const pct = (a: number[], q: number) => [...a].sort((x, y) => x - y)[Math.floor(a.length * q)];
-  return Object.entries(out).map(([k, o]) => ({ 路線: kind, 到達: k, 平均等級: avg(o.lv).toFixed(2), 'p10等級': pct(o.lv, .1).toFixed(2), 累計遇敵: avg(o.enc).toFixed(1), 累計分鐘: avg(o.min).toFixed(0), 累計戰敗: (o.lose / n).toFixed(2) }));
+  return Object.entries(out).map(([k, o]) => ({ 路線: kind, 到達: k, ...statOptions, 平均等級: avg(o.lv).toFixed(2), 'p10等級': pct(o.lv, .1).toFixed(2), 累計遇敵: avg(o.enc).toFixed(1), 累計分鐘: avg(o.min).toFixed(0), 累計戰敗: (o.lose / n).toFixed(2) }));
 }
 function checkTalkRates() {
   let worst = 0;
-  for (const e of Object.values(ENEMIES).filter(e => !e.boss && !['echobat', 'mossrock', 'mossantler_boss', 'sighvine_boss'].includes(e.id) && !CH2_SCENARIOS.some(sc => sc.enc === `sim_${e.id}`))) {
+  const riverMonsters = new Set([...FIXED[FANER_ENCOUNTER].enemies, ...ENCOUNTERS[BRIDGE_ENCOUNTER].groups.flatMap(group => group.enemies)]);
+  for (const e of Object.values(ENEMIES).filter(e => !e.boss && !riverMonsters.has(e.id) && !['echobat', 'mossrock', 'mossantler_boss', 'sighvine_boss'].includes(e.id) && !CH2_SCENARIOS.some(sc => sc.enc === `sim_${e.id}`))) {
     for (const extra of [0, e.talkBonus?.add ?? 0]) {
       for (let c = 0; c <= 30; c++) {
         const old = Math.min(.95, e.talkBase + extra + .05 * c);
@@ -270,11 +319,11 @@ async function compareStats() {
   const rows: any[] = [];
   const originalRandom = Math.random;
   try {
-    for (const scenario of SCENARIOS) for (const lv of scenario.lv) for (const party of scenario.parties) {
+    for (const scenario of SCENARIOS.filter(sc => !CH3_SCENARIOS.includes(sc))) for (const lv of scenario.lv) for (const party of scenario.parties) {
       const setup = { ...scenario, lv, party: P[party], policy: 'child' as const };
       const startTrial = (i: number) => { Math.random = seeded(Math.imul(i + 1, 0x9e3779b9)); };
       const old = await batch({ ...setup, legacy: true }, n, startTrial);
-      const current = await batch({ ...setup, stats: true }, n, startTrial);
+      const current = await batch({ ...setup, ...statOptions, stats: true }, n, startTrial);
       rows.push({ 情境: scenario.name, 等級: lv, 隊伍: party, 舊版: old, 新版: current });
     }
   } finally { Math.random = originalRandom; }
@@ -289,9 +338,10 @@ async function compareStats() {
   });
   const file = process.argv[process.argv.indexOf('--stats') + 1] || 'sim/stats_010.json';
   const fs = await import('node:fs');
-  fs.writeFileSync(file, JSON.stringify({ 每組場次: n, 對話成功率最大降幅: worst, 摘要: summaries, 結果: rows }, null, 2) + '\n');
+  fs.writeFileSync(file, JSON.stringify({ 每組場次: n, 新數值: statOptions, 對話成功率最大降幅: worst, 摘要: summaries, 結果: rows }, null, 2) + '\n');
   console.table(summaries);
 }
+console.log('模擬設定', statOptions);
 if (process.argv.includes('--stats')) await compareStats();
 else if (process.argv.includes('--curve')) (async () => { const rows = []; for (const k of ['ali', 'mint', 'full'] as const) rows.push(...await curve(k, 400)); console.table(rows); console.log('戰敗來源', LOSS); const j = process.argv.indexOf('--json'); if (j > 0) (await import('fs')).writeFileSync(process.argv[j + 1], JSON.stringify(rows, null, 1)); })();
 else main();

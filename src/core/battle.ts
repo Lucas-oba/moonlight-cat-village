@@ -15,6 +15,12 @@ export function talkChance(base: number, courage: number, kindness: number, purr
 }
 export const criticalChance = (observation: number) => observation < 5 ? 0 : Math.min(0.3, 0.08 + 0.02 * observation);
 export const helperChance = (kindness: number) => Math.min(0.4, 0.1 + kindness * 0.01);
+export const relayChance = (friendship: number) => friendship > 0 ? Math.min(.30, .05 + .01 * friendship) : 0;
+export const guardReduction = (honesty: number) => honesty > 0 ? Math.min(.30, .10 + .01 * honesty) : 0;
+export const hopeChance = (hope: number) => hope > 0 ? Math.min(.60, .10 + .02 * hope) : 0;
+export function boostedHealing(amount: number, love: number) {
+  return Math.round(amount * (1 + Math.min(.25, .01 * Math.max(0, love))));
+}
 export function bossTalkChance(base: number, courage: number) {
   return Math.min(0.95, base + courage * 0.05);
 }
