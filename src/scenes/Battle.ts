@@ -3,22 +3,25 @@ import Phaser from 'phaser';
 import { G } from '../core/game';
 import { ENEMIES, ENCOUNTERS, FIXED } from '../data/enemies';
 import { ITEMS, STICKERS } from '../data/items';
+import { FANER_ENCOUNTER, FANER_SKILL_TIPS } from '../data/ch3_boss';
 import { MEMBERS, MAX_PARTY, type SkillDef } from '../data/characters';
 import type { EnemyDef, FixedEncounter } from '../data/types';
-import { memberStats, addExp } from '../core/state';
-import { bossTalkChance, calcDamage, talkChance, escapeChance, criticalChance, helperChance } from '../core/battle';
+import { availableSkills, memberStats, addExp } from '../core/state';
+import { bossTalkChance, calcDamage, talkChance, escapeChance, criticalChance, helperChance,
+  relayChance, guardReduction, boostedHealing, hopeChance } from '../core/battle';
 import { notify, advance } from '../core/quests';
 import { check } from '../core/conditions';
 import { el, root, A } from '../ui/ui';
 import { sfx } from '../core/sfx';
 import { music } from '../core/music';
 
-type Foe = { def: EnemyDef; hp: number; atkUp: number; sleep: number; spr: Phaser.GameObjects.Image; gone: boolean; how?: 'defeat' | 'talk' | 'flee'; label: string; called?: boolean; stole?: string; moodMatched?: boolean; info?: HTMLElement };
-type Ally = { id: string; sticky: number; stun: number; sleep: number; bindTurn: number; cryTurn: number; cryUntil: number; defend: boolean; taunt: number; coveredBy: string | null; sharedWith?: string; dashUsed: boolean; justIn: boolean; guardUp?: number };
+type Foe = { def: EnemyDef; hp: number; atkUp: number; sleep: number; spr: Phaser.GameObjects.Image; gone: boolean; how?: 'defeat' | 'talk' | 'flee'; label: string; called?: boolean; stole?: string; moodMatched?: boolean; slowTurn?: number; info?: HTMLElement };
+type Ally = { id: string; sticky: number; stun: number; sleep: number; bindTurn: number; cryTurn: number; cryUntil: number; defend: boolean; taunt: number; coveredBy: string | null; sharedWith?: string; cushionTurn?: number; rowing?: { turn: number; power: number }; dashUsed: boolean; justIn: boolean; guardUp?: number };
 type Cmd = { who: string; kind: 'attack' | 'skill' | 'item' | 'defend' | 'run' | 'talk'; foe?: Foe; ally?: string; item?: string; skill?: SkillDef; extra?: boolean; care?: boolean };
 export type BattleResult = 'win' | 'lose' | 'escape';
 const ANTLER_HINT = '苔角不是壞蛋喵……牠在痛。要打的是那個藤！';
-const CALM_MAX = 6;
+const FANER_HINT = '打鬆紫結舊橋索。點一下帆耳，和牠說說話。';
+export const CALM_MAX = 6;
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export class BattleScene extends Phaser.Scene {
@@ -32,17 +35,28 @@ export class BattleScene extends Phaser.Scene {
   private helperUsed = false;
   private helperGuard = false;
   private cheerTurn = 0;
+  private relayTurn = -1;
+  private loveShownTurn = -1;
+  private hopeRollTurn = -1;
+  private hopeUsed = false;
   calm = 0;
   private idleRounds = 0;
   private calmEl?: HTMLElement;
-  private vineEl?: HTMLElement;
+  private obstacleEl?: HTMLElement;
   private mistEl?: HTMLElement;
-  private antlerTarget = false;
+  private creatureTarget = false;
+  private flagCheer = false;
+  private flagGuard = false;
+  private flagsEl?: HTMLElement;
   get antlerBattle() { return this.fixed && this.encId === 'c2_mossantler'; }
-  get vine() { return this.foes[0]; }
-  get antler() { return this.foes[1]; }
-  private get vineRatio() { return Math.max(0, this.vine.hp) / this.vine.def.hp; }
-  private attackTargets() { return this.antlerBattle ? this.alive().filter(f => f === this.vine) : this.alive(); }
+  get fanerBattle() { return this.fixed && this.encId === FANER_ENCOUNTER; }
+  private get careBattle() { return this.antlerBattle || this.fanerBattle; }
+  get obstacle() { return this.foes[0]; }
+  get creature() { return this.foes[1]; }
+  get vine() { return this.obstacle; }
+  get antler() { return this.creature; }
+  private get obstacleRatio() { return Math.max(0, this.obstacle.hp) / this.obstacle.def.hp; }
+  private attackTargets() { return this.careBattle ? this.alive().filter(f => f === this.obstacle) : this.alive(); }
 
   constructor() { super('Battle'); }
   init(d: { enc: string; fixed: boolean; resolve: (r: BattleResult) => void }) { this.encId = d.enc; this.fixed = d.fixed; this.resolve = d.resolve; this.foes = []; this.allies = []; this.turn = 0; this.latePhase = false; this.lateShown = false; this.sharedKindness = false; this.purrBonus = 0; this.usedSkills.clear(); this.regenTurns = 0; this.lastSkill = null; this.helperUsed = this.helperGuard = false; this.cheerTurn = 0; }
@@ -55,6 +69,8 @@ export class BattleScene extends Phaser.Scene {
   aliveAllies() { return this.allies.filter(a => this.hp(a.id) > 0); }
   create() {
     this.ui = undefined!;
+    this.relayTurn = this.loveShownTurn = this.hopeRollTurn = -1;
+    this.hopeUsed = false;
     let ids: string[]; let bg = 'battlebg';
     if (this.fixed) { const f = FIXED[this.encId]; this.fx = f; ids = f.enemies; bg = f.bg; this.hintText = f.hint ?? ''; }
     else {
@@ -66,13 +82,16 @@ export class BattleScene extends Phaser.Scene {
     this.relabel();
     this.allies = this.activeIds().map(id => this.newAlly(id));
     this.layout(); this.scale.on('resize', this.layout, this); this.events.once('shutdown', () => { this.scale.off('resize', this.layout, this); this.ui?.remove(); });
-    this.calm = this.antlerBattle && G.s.flags.c2_antler_touch ? 1 : 0;
+    this.calm = Number(Boolean(this.antlerBattle && G.s.flags.c2_antler_touch ||
+      this.fanerBattle && G.s.flags.brave_c3_faner_approach));
+    this.flagCheer = this.flagGuard = false;
+    this.flagsEl = undefined;
     this.idleRounds = 0;
-    this.antlerTarget = false;
+    this.creatureTarget = false;
     this.buildUI();
-    if (this.antlerBattle) {
+    if (this.careBattle) {
       for (const a of this.allies) G.s.members[a.id].hp = Math.max(1, this.hp(a.id));
-      this.buildAntlerUI();
+      this.buildCareBattleUI();
     }
     this.foes.forEach(f => this.addFoeInfo(f));
     this.cameras.main.fadeIn(300);
@@ -93,39 +112,39 @@ export class BattleScene extends Phaser.Scene {
     const n = this.foes.length; const ss = Math.min(1.1, w / 390) * (n > 2 ? .66 : n > 1 ? .78 : 1);
     const xs = n === 1 ? [.5] : n === 2 ? [.3, .7] : n === 3 ? [.2, .5, .8] : [.14, .38, .62, .86];
     this.foes.forEach((f, i) => { f.spr.setPosition(w * (xs[i] ?? .5), h * (.44 + (n > 2 && i % 2 ? .03 : 0))); f.spr.setScale(ss); this.placeFoeInfo(f); });
-    if (this.antlerBattle && this.calmEl) this.renderAntler();
+    if (this.careBattle && this.calmEl) this.renderCareMeters();
   }
-  private buildAntlerUI() {
-    this.mistEl = el('div', 'antler-mist', '', root());
+  private buildCareBattleUI() {
+    if (this.antlerBattle) this.mistEl = el('div', 'antler-mist', '', root());
     this.events.once('shutdown', () => {
       this.mistEl?.remove();
-      this.calmEl = this.vineEl = this.mistEl = undefined;
+      this.calmEl = this.obstacleEl = this.mistEl = undefined;
     });
     this.calmEl = el('div', 'antler-meter', '', this.ui);
-    this.vineEl = el('div', 'antler-meter vine-meter', '', this.ui);
-    this.renderAntler();
+    this.obstacleEl = el('div', 'antler-meter vine-meter', '', this.ui);
+    this.renderCareMeters();
   }
-  private renderAntler() {
+  private renderCareMeters() {
     const place = (meter: HTMLElement, f: Foe) => {
       meter.style.left = `${f.spr.x}px`;
       meter.style.top = `${Math.max(12, f.spr.y - f.spr.height * 1.05 - 56)}px`;
     };
     const calm = this.calmEl!;
     calm.dataset.calm = String(this.calm);
-    calm.innerHTML = `苔角<br>平靜 <span>${'♥'.repeat(this.calm)}${'♡'.repeat(CALM_MAX - this.calm)}</span>`;
-    place(calm, this.antler);
-    const vine = this.vineEl!;
-    vine.dataset.hp = String(Math.max(0, this.vine.hp));
-    vine.dataset.max = String(this.vine.def.hp);
-    vine.innerHTML = `嘆氣藤<br>${Math.max(0, this.vine.hp)} / ${this.vine.def.hp}<div class="bar"><i style="width:${this.vineRatio * 100}%"></i></div>`;
-    place(vine, this.vine);
-    this.mistEl!.style.opacity = String(this.vineRatio);
-    this.vine.spr.setScale(this.vineRatio * .35 + .43, this.vine.spr.scaleY);
+    calm.innerHTML = `${this.creature.label}<br>平靜 <span>${'♥'.repeat(this.calm)}${'♡'.repeat(CALM_MAX - this.calm)}</span>`;
+    place(calm, this.creature);
+    const vine = this.obstacleEl!;
+    vine.dataset.hp = String(Math.max(0, this.obstacle.hp));
+    vine.dataset.max = String(this.obstacle.def.hp);
+    vine.innerHTML = `${this.obstacle.label}<br>${Math.max(0, this.obstacle.hp)} / ${this.obstacle.def.hp}<div class="bar"><i style="width:${this.obstacleRatio * 100}%"></i></div>`;
+    place(vine, this.obstacle);
+    if (this.mistEl) this.mistEl.style.opacity = String(this.obstacleRatio);
+    this.obstacle.spr.setScale(this.obstacleRatio * .35 + .43, this.obstacle.spr.scaleY);
   }
   private async soothe(n: number, line: string) {
     const added = Math.min(n, CALM_MAX - this.calm);
     this.calm += added;
-    this.renderAntler();
+    this.renderCareMeters();
     sfx.heal();
     await this.say(added ? `${line} 平靜 +${added} ♥` : line);
   }
@@ -156,10 +175,50 @@ export class BattleScene extends Phaser.Scene {
       }
     });
   }
+  async careForFaner() {
+    const care = el('div', 'antler-care faner-care', '<h2>照顧時間</h2><p>點耳朵旁的結，把最後一圈解開。</p>', this.ui);
+    const closeup = el('div', 'faner-closeup', '', care);
+    closeup.style.backgroundImage = `url(${A('faner_boss')})`;
+    const knot = el('button', 'faner-knot', `<img src="${A('ropeknot_boss')}" alt="">`, closeup);
+    knot.setAttribute('aria-label', '解開最後一圈繩結');
+    const line = el('p', 'antler-care-line', '帆耳低下頭，把耳朵靠過來。', care);
+    closeup.onclick = () => { sfx.blob(); line.textContent = '帆耳小小聲地叫：「嗚……」'; };
+    await new Promise<void>(resolve => {
+      knot.onclick = event => { event.stopPropagation(); resolve(); };
+    });
+    knot.remove();
+    sfx.heal();
+    care.querySelector('p')!.textContent = '最後一圈解開了。';
+    line.textContent = '帆耳把前腳放到石頭上。等牠準備好。';
+    const next = el('button', 'big-btn', '陪帆耳慢慢站起來', care);
+    await new Promise<void>(resolve => { next.onclick = () => resolve(); });
+    sfx.heal();
+    closeup.style.backgroundImage = `url(${A('faner_calm')})`;
+    closeup.onclick = null;
+    this.creature.spr.setTexture('faner_calm');
+    care.querySelector('p')!.textContent = '帆耳慢慢站起來了！';
+    line.textContent = '牠抖掉水珠。兩隻耳朵像小船的帆，在風裡輕輕搖。';
+    next.textContent = '照顧好了';
+    await new Promise<void>(resolve => { next.onclick = () => resolve(); });
+    care.remove();
+  }
+  private async waveFlags() {
+    this.flagsEl?.remove();
+    const chance = Math.min(.70, .20 + .02 * G.s.friendship);
+    if (Math.random() >= chance) return;
+    const cheering = !this.flagCheer && this.calm < CALM_MAX;
+    if (cheering) this.flagCheer = true;
+    else this.flagGuard = true;
+    const bank = (id: string, name: string) =>
+      `<div><img src="${A(id)}" alt=""><img class="waving-flag" src="${A('c3_flag')}" alt=""><span>${name}</span></div>`;
+    this.flagsEl = el('div', 'faner-flags', bank('xiaosui', '小穗') + bank('diandian', '點點'), this.ui);
+    sfx.heal();
+    await this.say('小穗和點點在兩岸揮旗！' + (cheering ? '下次和帆耳說話，平靜多一顆心。' : '大家拉好橋索，會幫忙擋一下。'), 1450);
+  }
   private placeFoeInfo(f: Foe) {
     if (!f.info) return;
-    f.info.style.left = `${f.spr.x + (this.antlerBattle ? 63 : 0)}px`;
-    f.info.style.top = `${Math.max(8, f.spr.y - (this.antlerBattle ? f.spr.height * .75 : f.spr.displayHeight + 24))}px`;
+    f.info.style.left = `${f.spr.x + (this.careBattle ? 63 : 0)}px`;
+    f.info.style.top = `${Math.max(8, f.spr.y - (this.careBattle ? f.spr.height * .75 : f.spr.displayHeight + 24))}px`;
   }
   private foeDetails(f: Foe) {
     const obs = G.s.observation;
@@ -182,6 +241,15 @@ export class BattleScene extends Phaser.Scene {
     if (G.s.observation < 3 || f.moodMatched) return;
     f.moodMatched = true;
     await this.say(`心情對了！${f.label}好像比較放心了。`);
+  }
+  private clearOneStatus(a: Ally) {
+    if (a.stun) a.stun = 0;
+    else if (a.sleep) a.sleep = 0;
+    else if (a.bindTurn >= this.turn) a.bindTurn = -1;
+    else if (a.sticky) a.sticky = 0;
+    else if (a.cryUntil >= this.turn) a.cryUntil = -1;
+    else return false;
+    return true;
   }
   private clearStatus(a: Ally) {
     a.sticky = a.stun = a.sleep = 0;
@@ -228,7 +296,7 @@ export class BattleScene extends Phaser.Scene {
       const a = this.allies[i];
       if (!a) { el('div', 'pslot empty', '<div>空位<br><small>（找到夥伴就能一起戰鬥）</small></div>', this.partyEl); continue; }
       const id = a.id; const m = s.members[id]; const st = memberStats(s, id); const ko = m.hp <= 0;
-      const tags = [a.sticky ? '黏黏' : '', a.stun ? '暈暈' : '', a.sleep ? '睡著' : '', a.bindTurn >= this.turn ? '被綁住' : '', this.turn <= a.cryUntil ? '想哭' : '', a.defend ? '防禦' : '', a.taunt ? '吸引' : '', a.coveredBy || a.sharedWith ? '被保護' : '', a.guardUp ? '勇氣' : '', ko ? '倒下' : '', s.guest === id ? '同行' : ''].filter(Boolean);
+      const tags = [a.sticky ? '黏黏' : '', a.stun ? '暈暈' : '', a.sleep ? '睡著' : '', a.bindTurn >= this.turn ? '被綁住' : '', this.turn <= a.cryUntil ? '想哭' : '', a.defend ? '防禦' : '', a.taunt ? '吸引' : '', a.coveredBy || a.sharedWith || a.cushionTurn === this.turn ? '被保護' : '', a.rowing?.turn === this.turn ? '一起划' : '', a.guardUp ? '勇氣' : '', ko ? '倒下' : '', s.guest === id ? '同行' : ''].filter(Boolean);
       const d = el('div', 'pslot' + (active === id ? ' active' : '') + (ko ? ' ko' : ''), `<div class="sts">${tags.map(t => `<span class="st${t === '防禦' || t === '被保護' ? ' good' : ''}">${t}</span>`).join('')}</div><div class="nm"><img src="${A(MEMBERS[id].icon)}" alt=""><span>${this.name(id)}</span>${id === 'hero' ? '' : `<span>Lv ${m.lv}</span>`}</div>${id === 'hero' ? `<div class="hero-combat-title">Lv ${m.lv}・${heroTitle(s.courage)}</div>` : ''}
         <div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div>HP ${m.hp}/${st.maxHp}</div><div class="bar mp"><i style="width:${(m.mp / st.maxMp) * 100}%"></i></div><div class="mpn">MP ${m.mp}/${st.maxMp}</div>`, this.partyEl);
       d.dataset.id = id;
@@ -236,10 +304,18 @@ export class BattleScene extends Phaser.Scene {
   }
   async say(t: string, ms = 900) { this.msgEl.innerHTML = t; await new Promise<void>(res => { const tm = setTimeout(done, ms); const self = this; function done() { clearTimeout(tm); self.msgEl.removeEventListener('pointerdown', done); res(); } this.msgEl.addEventListener('pointerdown', done); }); }
   alive() { return this.foes.filter(f => !f.gone); }
-  menu(items: { label: string; cls?: string; disabled?: boolean; glow?: boolean; v: string }[], grid = true): Promise<string> {
+  menu(items: { label: string; cls?: string; disabled?: boolean; glow?: boolean; v: string }[], grid = true, tapCreature = false): Promise<string> {
     return new Promise(res => {
       this.cmdEl.className = grid ? 'cmds' : 'sublist'; this.cmdEl.innerHTML = '';
-      for (const it of items) { const b = el('button', (it.cls ?? '') + (it.glow ? ' glowing' : ''), it.label, this.cmdEl) as HTMLButtonElement; b.disabled = !!it.disabled; b.onclick = () => { sfx.blip(); this.cmdEl.innerHTML = ''; res(it.v); }; }
+      const talk = () => choose('talk');
+      const choose = (value: string) => {
+        if (tapCreature) this.creature.spr.off('pointerdown', talk).disableInteractive();
+        sfx.blip();
+        this.cmdEl.innerHTML = '';
+        res(value);
+      };
+      if (tapCreature) this.creature.spr.setInteractive().on('pointerdown', talk);
+      for (const it of items) { const b = el('button', (it.cls ?? '') + (it.glow ? ' glowing' : ''), it.label, this.cmdEl) as HTMLButtonElement; b.disabled = !!it.disabled; b.onclick = () => choose(it.v); }
     });
   }
   async pickTarget(): Promise<Foe | null> {
@@ -258,7 +334,7 @@ export class BattleScene extends Phaser.Scene {
     const v = await this.menu([...list.map(a => { const st = memberStats(G.s, a.id); return { label: `${this.name(a.id)}<small>HP ${this.hp(a.id)}/${st.maxHp}</small>`, v: a.id }; }), ...foes.map((f, i) => ({ label: `${f.label}<small>幫牠回血</small>`, v: `heal_${i}` })), { label: '↩ 返回', cls: 'back', v: '' }], false);
     return v || null;
   }
-  private hurtFoes() { return G.s.observation >= 3 ? this.alive().filter(f => f.def.mood === 'hurt') : []; }
+  private hurtFoes() { return !this.fanerBattle && G.s.observation >= 3 ? this.alive().filter(f => f.def.mood === 'hurt') : []; }
   private healTarget(who: string, kind: 'skill' | 'item', target: string, foes: Foe[]): Cmd {
     const foe = target.startsWith('heal_') ? foes[Number(target.slice(5))] : undefined;
     return { who, kind, foe, ally: foe ? undefined : target };
@@ -275,24 +351,36 @@ export class BattleScene extends Phaser.Scene {
       { label: '⚔️ 攻擊', v: 'attack', glow: tut === 'tut1' }, { label: '✨ 技能', v: 'skill', glow: tut === 'tut2' }, { label: '🍪 道具', v: 'item' },
       { label: '🛡️ 防禦', v: 'defend' },
     ];
-    if (this.antlerBattle) {
-      const soothe = this.antlerTarget || this.vine.gone;
+    if (this.careBattle) {
+      const soothe = this.creatureTarget || this.obstacle.gone;
       items[0] = soothe ? { label: '💬 對話／安撫', v: 'talk', cls: 'talk' } : items[0];
-      items.push({ label: soothe ? '目標：苔角' : '目標：嘆氣藤', v: 'target', disabled: this.vine.gone });
+      items.push({ label: `目標：${soothe ? this.creature.label : this.obstacle.label}`, v: 'target', disabled: this.obstacle.gone });
       if (!hero) items.push({ label: '🔄 換人', v: 'swap', disabled: !bench.length });
     } else if (hero) items.push({ label: '🏃 逃跑', v: 'run', disabled: !!this.fx?.noEscape }, { label: '💬 對話', v: 'talk', cls: 'talk', glow: tut === 'tut3' || (this.latePhase && !!this.alive().find(f => f.def.boss)) });
     else items.push({ label: '🔄 換人', v: 'swap', disabled: !bench.length }, { label: '💬 對話<small>（只有主角會）</small>', v: '', cls: 'talk', disabled: true });
-    const v = await this.menu(items);
-    if (this.antlerBattle) {
-      if (v === 'target') { this.antlerTarget = !this.antlerTarget; return null; }
-      if (v === 'attack' || v === 'talk') return { who: id, kind: v, foe: v === 'talk' ? this.antler : this.vine, extra };
+    const v = await this.menu(items, true, this.fanerBattle);
+    if (this.careBattle) {
+      if (v === 'target') { this.creatureTarget = !this.creatureTarget; return null; }
+      if (v === 'attack' || v === 'talk') return { who: id, kind: v, foe: v === 'talk' ? this.creature : this.obstacle, extra };
     }
     if (v === 'attack' || v === 'talk') { const f = await this.pickTarget(); return f ? { who: id, kind: v, foe: f, extra } : null; }
     if (v === 'skill') {
-      const sks = MEMBERS[id].skills.filter(k => m.lv >= k.learnLv && (!k.quest || !!G.s.skills?.[id]?.includes(k.id)));
-      const c = await this.menu([...sks.map(k => ({ label: `${k.name}<small>MP ${k.mp}・${this.antlerBattle && k.kind === 'purr' ? '讓苔角多一顆平靜愛心。' : k.desc}</small>`, v: k.id, disabled: (this.antlerBattle && this.vine.gone && ['attack', 'taunt', 'sleepFoe', 'allFoes'].includes(k.kind)) || m.mp < k.mp || this.usedSkills.has(k.id) || (k.kind === 'dash' && (a.dashUsed || extra)) })), { label: '↩ 返回', cls: 'back', v: '' }], false);
+      const sks = availableSkills(s, id);
+      const choices = sks.map(k => {
+        let desc = k.desc;
+        if (this.fanerBattle) desc = FANER_SKILL_TIPS[k.id] ?? desc;
+        else if (this.antlerBattle && k.kind === 'purr') desc = '讓苔角多一顆平靜愛心。';
+        const missingTarget = this.careBattle && this.obstacle.gone &&
+          ['attack', 'taunt', 'paddleSlow', 'sleepFoe', 'allFoes'].includes(k.kind);
+        return {
+          label: `${k.name}<small>MP ${k.mp}・${desc}</small>`, v: k.id,
+          disabled: missingTarget || (this.fanerBattle && k.kind === 'sleepFoe') ||
+            m.mp < k.mp || this.usedSkills.has(k.id) || (k.kind === 'dash' && (a.dashUsed || extra)),
+        };
+      });
+      const c = await this.menu([...choices, { label: '↩ 返回', cls: 'back', v: '' }], false);
       if (!c) return null; const sk = sks.find(k => k.id === c)!;
-      if (sk.kind === 'attack' || sk.kind === 'taunt' || sk.kind === 'sleepFoe') { const f = this.antlerBattle ? this.attackTargets()[0] : await this.pickTarget(); return f ? { who: id, kind: 'skill', skill: sk, foe: f, extra } : null; }
+      if (sk.kind === 'attack' || sk.kind === 'taunt' || sk.kind === 'paddleSlow' || sk.kind === 'sleepFoe') { const f = this.careBattle ? this.attackTargets()[0] : await this.pickTarget(); return f ? { who: id, kind: 'skill', skill: sk, foe: f, extra } : null; }
       if ((sk.kind === 'heal' || sk.kind === 'healAll') && this.hurtFoes().length) {
         const foes = this.hurtFoes();
         const t = sk.kind === 'heal' ? await this.pickAlly('要幫誰回血呢？', undefined, foes) :
@@ -300,7 +388,11 @@ export class BattleScene extends Phaser.Scene {
         return t ? { ...this.healTarget(id, 'skill', t, foes), skill: sk, extra } : null;
       }
       if (sk.kind === 'heal' || sk.kind === 'cure') { const t = await this.pickAlly(sk.kind === 'heal' ? '要幫誰回血呢？' : '要幫誰解除不舒服呢？'); return t ? { who: id, kind: 'skill', skill: sk, ally: t, extra } : null; }
-      if (sk.kind === 'guard' || sk.kind === 'splitGuard') { const t = await this.pickAlly('要保護誰呢？', x => x.id !== id && this.hp(x.id) > 0); return t ? { who: id, kind: 'skill', skill: sk, ally: t, extra } : null; }
+      if (['guard', 'splitGuard', 'cushionGuard', 'rowTogether'].includes(sk.kind)) {
+        const prompt = sk.kind === 'rowTogether' ? '要和誰一起划呢？' : '要保護誰呢？';
+        const t = await this.pickAlly(prompt, x => x.id !== id && this.hp(x.id) > 0);
+        return t ? { who: id, kind: 'skill', skill: sk, ally: t, extra } : null;
+      }
       if (sk.kind === 'deliver') {
         const supplies = Object.entries(s.inventory).filter(([iid, n]) => n > 0 && ITEMS[iid]?.battle);
         const item = await this.menu([
@@ -319,7 +411,7 @@ export class BattleScene extends Phaser.Scene {
       const c = await this.menu([...usable.map(([iid, n]) => ({ label: `${ITEMS[iid].name}<small>×${n}</small>`, v: iid })), ...(usable.length ? [] : [{ label: '沒有可以用的道具', v: '', disabled: true }]), { label: '↩ 返回', cls: 'back', v: '' }], false);
       if (!c) return null;
       const hurt = ITEMS[c].heal ? this.hurtFoes() : [];
-      const foes = ITEMS[c].food && !this.antlerBattle ? this.alive().filter(f => !f.def.boss) : [];
+      const foes = ITEMS[c].food && !this.careBattle ? this.alive().filter(f => !f.def.boss) : [];
       if (foes.length || hurt.length) {
         this.msgEl.textContent = '要把食物給誰呢？';
         const allies = this.aliveAllies().map(a => ({ label: `${this.name(a.id)}<small>HP ${this.hp(a.id)}/${memberStats(s, a.id).maxHp}</small>`, v: a.id }));
@@ -341,7 +433,7 @@ export class BattleScene extends Phaser.Scene {
   }
   async swap(outId: string, inId: string) {
     const i = this.allies.findIndex(x => x.id === outId); const na = this.newAlly(inId); na.justIn = true; this.allies[i] = na;
-    const s = G.s; if (this.antlerBattle) s.members[inId].hp = Math.max(1, this.hp(inId)); const pi = s.party.indexOf(outId); if (pi >= 0) s.party[pi] = inId; else s.party.push(inId);
+    const s = G.s; if (this.careBattle) s.members[inId].hp = Math.max(1, this.hp(inId)); const pi = s.party.indexOf(outId); if (pi >= 0) s.party[pi] = inId; else s.party.push(inId);
     sfx.ok(); this.renderParty(); await this.say(`${this.name(outId)}退到後面休息，換${this.name(inId)}上場！`, 1000);
   }
   // ---------- 主流程 ----------
@@ -352,11 +444,13 @@ export class BattleScene extends Phaser.Scene {
       s.flags.mood_explained = true;
       await this.say('🔍 點魔物頭上的圖示，就能看看牠的心情喵！', 1600);
     }
-    if (this.antlerBattle) await this.say(ANTLER_HINT, 2600);
+    if (this.careBattle) await this.say(this.fanerBattle ? FANER_HINT : ANTLER_HINT, 2600);
     for (const ln of this.fx?.startLines ?? []) if (this.ally(ln.who)) await this.say(`${this.name(ln.who)}：「${G.fmt(ln.t)}」`, 1500);
     while (true) {
       this.turn++;
-      const progress = this.antlerBattle ? this.vine.hp - this.calm : 0;
+      const progress = this.careBattle ? this.obstacle.hp - this.calm : 0;
+      if (s.hope > 0) await this.tryHope();
+      if (this.fanerBattle) await this.waveFlags();
       await this.tryHelper();
       this.checkLate();
       if (this.latePhase && !this.lateShown) { this.lateShown = true; await this.showLate(); }
@@ -376,9 +470,9 @@ export class BattleScene extends Phaser.Scene {
       }
       this.hintEl.classList.add('hidden'); this.renderParty();
       // 2. 依照速度排順序（防禦、保護最先）
-      const prio = (c: Cmd) => (c.kind === 'defend' || (c.skill?.kind === 'guard' || c.skill?.kind === 'splitGuard') ? 100 : 0) + this.spdOf(c.who) + (c.extra ? -0.1 : 0);
+      const prio = (c: Cmd) => (c.kind === 'defend' || (c.skill && ['guard', 'splitGuard', 'cushionGuard', 'rowTogether'].includes(c.skill.kind)) ? 100 : 0) + this.spdOf(c.who) + (c.extra ? -0.1 : 0);
       type Ev = { cmd?: Cmd; foe?: Foe; p: number };
-      const evs: Ev[] = [...cmds.map(c => ({ cmd: c, p: prio(c) })), ...this.alive().map(f => ({ foe: f, p: f.def.spd + Math.random() * .5 }))];
+      const evs: Ev[] = [...cmds.map(c => ({ cmd: c, p: prio(c) })), ...this.alive().map(f => ({ foe: f, p: this.foeSpeed(f) + Math.random() * .5 }))];
       // 這回合被暈眩／睡著的人：說明一下
       for (const a of this.allies) if (this.hp(a.id) > 0 && (a.stun || a.sleep || a.bindTurn === this.turn)) { await this.say(`${this.name(a.id)}${a.stun ? '頭暈暈的，動不了！' : a.bindTurn === this.turn ? '的腳被綁住了，動不了！' : '呼嚕呼嚕……睡著了。'}`, 800); }
       evs.sort((x, y) => y.p - x.p);
@@ -388,17 +482,19 @@ export class BattleScene extends Phaser.Scene {
           const r = await this.doCmd(e.cmd); if (r) return this.finish(r);
         } else if (e.foe && !e.foe.gone) {
           await this.doFoe(e.foe); if (!this.aliveAllies().length) return this.finish('lose');
+          if (s.hope > 0) await this.tryHope();
         }
-        if (this.antlerBattle && this.vine.gone && this.calm === CALM_MAX) {
-          await this.careForAntler();
-          G.s.journal[2].friends++;
+        if (this.careBattle && this.obstacle.gone && this.calm === CALM_MAX) {
+          if (this.fanerBattle) await this.careForFaner();
+          else await this.careForAntler();
+          s.journal[this.fanerBattle ? 3 : 2].friends++;
           return this.finish('win');
         }
         if (!this.alive().length) return this.finish('win');
       }
-      if (this.antlerBattle) {
-        this.idleRounds = this.vine.hp - this.calm === progress ? this.idleRounds + 1 : 0;
-        if (this.idleRounds === 3) { await this.say(ANTLER_HINT, 2400); this.idleRounds = 0; }
+      if (this.careBattle) {
+        this.idleRounds = this.obstacle.hp - this.calm === progress ? this.idleRounds + 1 : 0;
+        if (this.idleRounds === 3) { await this.say(this.fanerBattle ? FANER_HINT : ANTLER_HINT, 2400); this.idleRounds = 0; }
       }
       // 3. 回合結束
       if (this.regenTurns > 0) {
@@ -423,6 +519,12 @@ export class BattleScene extends Phaser.Scene {
     return command;
   }
   spdOf(id: string) { const a = this.ally(id); return memberStats(G.s, id).spd * (a?.sticky ? .3 : 1); }
+  foeSpeed(f: Foe) { return f.def.spd * (f.slowTurn === this.turn ? 0.5 : 1); }
+  attackOf(id: string, stats = memberStats(G.s, id)) {
+    const a = this.ally(id)!;
+    return stats.atk * (this.turn > a.cryTurn && this.turn <= a.cryUntil ? .75 : 1) *
+      (this.cheerTurn === this.turn ? 1.2 : 1) * (a.rowing?.turn === this.turn ? a.rowing.power : 1);
+  }
   talkBase(f: Foe) {
     const s = G.s; const fx = this.fx;
     let base = f.def.talkBase + (fx?.talkBonus ?? 0);
@@ -448,8 +550,8 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: tx, y: y - 46, alpha: 0, duration: 1000, ease: 'Cubic.out', onComplete: () => tx.destroy() });
   }
   async hitFoe(f: Foe, dmg: number, big = false, golden = false) {
-    if (this.antlerBattle && f !== this.vine) return;
-    const wasThick = this.antlerBattle && this.vineRatio > .5;
+    if (this.careBattle && f !== this.obstacle) return;
+    const wasThick = this.careBattle && this.obstacleRatio > .5;
     const chance = f.def.weak ? criticalChance(G.s.observation) : 0;
     const critical = chance > 0 && Math.random() < chance;
     if (critical) {
@@ -461,32 +563,71 @@ export class BattleScene extends Phaser.Scene {
     sfx.hit(); this.tweens.killTweensOf(f.spr); f.spr.setAlpha(1); this.tweens.add({ targets: f.spr, alpha: .2, duration: 70, yoyo: true, repeat: 2, onComplete: () => { if (!f.gone) f.spr.setAlpha(1); } }); // 連續被打時先停掉上一次的閃爍，避免停在半透明
     f.sleep = 0;
     f.hp -= dmg; this.floatText(f.spr.x, f.spr.y - f.spr.displayHeight * .6, String(dmg), big || critical ? '#ffe17a' : '#ffffff');
-    if (this.antlerBattle) this.renderAntler();
+    if (this.careBattle) this.renderCareMeters();
     await wait(350);
     if (f.hp <= 0) {
       f.info?.remove(); f.gone = true; f.how = 'defeat'; sfx.enemyDown(); this.tweens.add({ targets: f.spr, alpha: 0, scaleX: f.spr.scaleX * 1.4, scaleY: 0, duration: 400 });
-      if (this.antlerBattle) await this.say('嘆氣藤斷開了。苔角輕輕吐了一口氣。');
+      if (this.fanerBattle) await this.say('橋索鬆開了！耳朵上還有最後一圈結。');
+      else if (this.antlerBattle) await this.say('嘆氣藤斷開了。苔角輕輕吐了一口氣。');
       else if (f.def.boss) await this.say(`${f.label}「咚」地一聲坐在地上，大口大口喘氣……`, 1300);
       else await this.say(`${f.label} 縮成一小團，咕嚕咕嚕地逃走了！`, 900);
-    } else if (wasThick && this.vineRatio <= .5) await this.say('嘆氣藤變細了。苔角的聲音也小了。');
+    } else if (wasThick && this.obstacleRatio <= .5) await this.say(this.fanerBattle ? '舊橋索鬆了一半。帆耳抬起了頭。' : '嘆氣藤變細了。苔角的聲音也小了。');
   }
-  heal(id: string, n: number) { const st = memberStats(G.s, id); const m = G.s.members[id]; const b = m.hp; m.hp = Math.min(st.maxHp, m.hp + n); return m.hp - b; }
+  private async tryRelay(hit?: Foe) {
+    if (this.relayTurn === this.turn || (this.careBattle && hit && hit !== this.obstacle)) return;
+    const target = hit && !hit.gone ? hit : this.attackTargets()[0];
+    if (!target) return;
+    const partner = this.aliveAllies().find(a => a.id !== 'hero' && !a.justIn && !a.stun && !a.sleep && a.bindTurn !== this.turn);
+    if (!partner || Math.random() >= relayChance(G.s.friendship)) return;
+    this.relayTurn = this.turn;
+    await this.say(`🤝 夥伴接力！${this.name(partner.id)}接著打一下！`, 800);
+    await this.hitFoe(target, calcDamage(this.attackOf(partner.id), target.def.def, .5));
+  }
+  private async tryHope() {
+    const s = G.s;
+    if (this.hopeUsed || this.hopeRollTurn === this.turn || !s.hope) return;
+    const team = this.aliveAllies();
+    if (!team.some(a => this.hp(a.id) < memberStats(s, a.id).maxHp * .3)) return;
+    this.hopeRollTurn = this.turn;
+    if (Math.random() >= hopeChance(s.hope)) return;
+    this.hopeUsed = true;
+    for (const a of team) this.heal(a.id, Math.round(memberStats(s, a.id).maxHp * .15));
+    sfx.heal();
+    this.renderParty();
+    await this.say('✨ 希望之光！大家一起回復了一點 HP。', 1000);
+  }
+  heal(id: string, n: number) {
+    const s = G.s;
+    const m = s.members[id];
+    const before = m.hp;
+    m.hp = Math.min(memberStats(s, id).maxHp, before + boostedHealing(n, s.love));
+    const recovered = m.hp - before;
+    if (recovered > n && this.loveShownTurn !== this.turn) {
+      this.loveShownTurn = this.turn;
+      G.ui.toast({ title: '💞 暖暖的手', text: '這次多回了一點 HP！' });
+    }
+    return recovered;
+  }
   async doCmd(c: Cmd): Promise<BattleResult | null> {
     const s = G.s; const id = c.who; const st = memberStats(s, id); const m = s.members[id]; const me = this.ally(id)!; const nm = this.name(id);
-    const atk = st.atk * (this.turn > me.cryTurn && this.turn <= me.cryUntil ? .75 : 1) *
-      (this.cheerTurn === this.turn ? 1.2 : 1);
+    const atk = this.attackOf(id, st);
     if (c.skill && ['heal', 'healAll'].includes(c.skill.kind) && c.foe?.gone) return null;
     if (c.kind !== 'item' && c.foe?.gone) {
-      if (this.antlerBattle) return null;
+      if (this.careBattle) return null;
       c.foe = this.alive()[0];
     } if (!c.foe && (c.kind === 'attack' || c.kind === 'talk')) return null;
     switch (c.kind) {
-      case 'attack': { await this.say(`${nm}${MEMBERS[id].verb}！`, 500); await this.hitFoe(c.foe!, calcDamage(atk, c.foe!.def.def)); break; }
+      case 'attack': {
+        await this.say(`${nm}${MEMBERS[id].verb}！`, 500);
+        await this.hitFoe(c.foe!, calcDamage(atk, c.foe!.def.def));
+        if (id === 'hero' && s.friendship > 0) await this.tryRelay(c.foe);
+        break;
+      }
       case 'skill': {
         const sk = c.skill!; if (m.mp < sk.mp) { await this.say(`${nm}的 MP 不夠了……`, 700); break; }
         if (this.usedSkills.has(sk.id)) break;
         if (sk.once) this.usedSkills.add(sk.id);
-        const damaging = ['attack', 'taunt', 'allFoes'].includes(sk.kind);
+        const damaging = ['attack', 'taunt', 'paddleSlow', 'allFoes'].includes(sk.kind);
         this.lastSkill = {
           name: sk.name,
           power: damaging ? (sk.id === 'brave_slash' && heroTier(s.courage) >= 2 ? 2 : sk.power) : 0,
@@ -496,6 +637,30 @@ export class BattleScene extends Phaser.Scene {
         if (sk.kind === 'deliver') {
           await this.say(`${nm}使出「${sk.name}」！`, 650);
           await this.doCmd({ who: id, kind: 'item', item: c.item, ally: c.ally, skill: sk });
+        } else if (sk.kind === 'cushionGuard' || sk.kind === 'rowTogether') {
+          const target = this.ally(c.ally!);
+          if (target && this.hp(target.id) > 0) {
+            if (sk.kind === 'cushionGuard') {
+              target.cushionTurn = this.turn;
+              await this.say(`${nm}拿起船墊，護著${this.name(target.id)}。`);
+            } else {
+              me.rowing = target.rowing = { turn: this.turn, power: sk.power };
+              await this.say(`${nm}：「${this.name(target.id)}，一起划！」這回合兩人的攻擊變強了。`);
+            }
+          }
+        } else if (sk.kind === 'paddleSlow' && c.foe) {
+          await this.say(`${nm}使出「${sk.name}」！`);
+          await this.hitFoe(c.foe, calcDamage(atk, c.foe.def.def, sk.power));
+          if (!this.fanerBattle && !c.foe.gone) {
+            c.foe.slowTurn = this.turn + 1;
+            await this.say(`${c.foe.label}下回合會慢一點。`);
+          }
+        } else if (sk.kind === 'ferryLight') {
+          const allies = this.aliveAllies();
+          for (const ally of allies) this.heal(ally.id, sk.power);
+          const helped = allies.find(ally => this.clearOneStatus(ally));
+          sfx.heal();
+          await this.say(`${nm}點亮「${sk.name}」。大家回復了一點 HP。${helped ? this.name(helped.id) + '舒服多了！' : ''}`);
         } else if (sk.kind === 'splitGuard') {
           const target = this.ally(c.ally!);
           if (target && this.hp(target.id) > 0) {
@@ -520,7 +685,13 @@ export class BattleScene extends Phaser.Scene {
         }
         else if (sk.kind === 'attack') { await this.say(`${nm}鼓起勇氣——「${sk.name}」！`, 700); this.cameras.main.shake(150, .006); const golden = sk.id === 'brave_slash' && heroTier(s.courage) >= 2;
           await this.hitFoe(c.foe!, calcDamage(atk, c.foe!.def.def, golden ? 2 : sk.power), true, golden); }
-        else if (sk.kind === 'taunt') { await this.say(`${nm}：「看這邊！」——「${sk.name}」！`, 700); me.taunt = 2; await this.hitFoe(c.foe!, calcDamage(atk, c.foe!.def.def, sk.power)); if (!c.foe!.gone) await this.say(`${c.foe!.label}生氣地瞪著${nm}！`, 700); }
+        else if (sk.kind === 'taunt') {
+          await this.say(`${nm}：「看這邊！」——「${sk.name}」！`, 700);
+          me.taunt = 2;
+          await this.hitFoe(c.foe!, calcDamage(atk, c.foe!.def.def, sk.power));
+          if (this.fanerBattle) await this.say(`${nm}舉起盾，站在大家前面。`, 700);
+          else if (!c.foe!.gone) await this.say(`${c.foe!.label}生氣地瞪著${nm}！`, 700);
+        }
         else if (sk.kind === 'guard') { const t = this.ally(c.ally!); if (t && this.hp(t.id) > 0) { t.coveredBy = id; await this.say(`${nm}：「${this.name(t.id)}，我來擋！」`, 900); } }
         else if (sk.kind === 'heal') { const n = this.hp(c.ally!) > 0 ? this.heal(c.ally!, sk.power + Math.floor(st.atk / 2)) : 0; sfx.heal(); await this.say(n ? `${nm}使出「${sk.name}」！${this.name(c.ally!)}回復了 ${n} HP！` : `${this.name(c.ally!)}${this.hp(c.ally!) > 0 ? '的 HP 已經滿了！' : '倒下了，無法回血……'}`, 1000); }
         else if (sk.kind === 'cure') { const t = this.ally(c.ally!); if (t) { const had = t.sticky || t.stun || t.sleep || t.bindTurn >= this.turn || this.turn <= t.cryUntil; this.clearStatus(t); sfx.heal(); await this.say(`${nm}使出「${sk.name}」！香香的花香飄過來${had ? `，${this.name(t.id)}舒服多了！` : '……大家都好放鬆。'}`, 1100); } }
@@ -535,9 +706,21 @@ export class BattleScene extends Phaser.Scene {
           await this.say('月光暖暖的。大家回復了 HP，也舒服多了！');
         }
         else if (sk.kind === 'healAll') { sfx.heal(); const parts: string[] = []; for (const x of this.aliveAllies()) { const n = this.heal(x.id, sk.power + Math.floor(st.atk / 3)); if (n) parts.push(`${this.name(x.id)} +${n}`); } await this.say(`${nm}打開「${sk.name}」！香香的草藥灑向大家。<br><small>${parts.join('、') || '大家都很有精神！'}</small>`, 1300); }
-        else if (sk.kind === 'peek') { const lines = this.alive().map(f => this.antlerBattle && f === this.antler ? `苔角：平靜 ${this.calm}／${CALM_MAX}${this.foeDetails(f) ? `<br>${this.foeDetails(f)}` : ''}` : `${f.label}：HP ${f.hp}／${f.def.hp}・對話成功率約 ${Math.round(this.talkCh(f) * 100)}%${this.foeDetails(f) ? `<br>${this.foeDetails(f)}` : ''}`); await this.say(`${nm}瞇起眼睛偷偷看……<br><small>${lines.join('<br>')}</small>`, 2200); }
+        else if (sk.kind === 'peek') {
+          const lines = this.alive().map(f => {
+            let info = `HP ${f.hp}／${f.def.hp}`;
+            if (this.careBattle && f === this.creature) info = `平靜 ${this.calm}／${CALM_MAX}`;
+            else if (!this.fanerBattle) info += `・對話成功率約 ${Math.round(this.talkCh(f) * 100)}%`;
+            const details = this.foeDetails(f);
+            return `${f.label}：${info}${details ? `<br>${details}` : ''}`;
+          });
+          await this.say(`${nm}瞇起眼睛偷偷看……<br><small>${lines.join('<br>')}</small>`, 2200);
+        }
         else if (sk.kind === 'purr') {
-          if (this.antlerBattle) await this.soothe(1, `${nm}輕輕地呼嚕。苔角聽見了。`);
+          if (this.fanerBattle) {
+            this.purrBonus = 1;
+            await this.say(`${nm}輕輕地呼嚕。下次和帆耳說話時，牠會更安心。`);
+          } else if (this.antlerBattle) await this.soothe(1, `${nm}輕輕地呼嚕。苔角聽見了。`);
           else {
             this.purrBonus = sk.power;
             await this.say(`${nm}輕輕地呼嚕……下一次對話更容易成功了！`);
@@ -550,6 +733,7 @@ export class BattleScene extends Phaser.Scene {
           } else await this.say(`${nm}唱起搖籃曲，${c.foe.label}還醒著。`);
         }
         else if (sk.kind === 'dash') { me.dashUsed = true; await this.say(`${nm}跑得像風一樣快！`, 700); }
+        if (id === 'hero' && damaging && s.friendship > 0) await this.tryRelay(c.foe);
         this.renderParty(); break;
       }
       case 'item': {
@@ -581,17 +765,29 @@ export class BattleScene extends Phaser.Scene {
         await this.say(`${target === id ? nm : `${nm}拿給${this.name(target)}`}吃了${it.name}，HP 回復了 ${n}！`, 900);
         break;
       }
-      case 'defend': { me.defend = true; await this.say(`${nm}準備好防禦！`, 600); this.renderParty(); break; }
+      case 'defend': {
+        me.defend = true;
+        await this.say(id === 'hero' && s.honesty > 0 ? '🔔 說到做到！這回合大家受到的傷害變少了。' : `${nm}準備好防禦！`, 600);
+        this.renderParty();
+        break;
+      }
       case 'run': {
-        const ch = escapeChance(st.spd, Math.max(...this.alive().map(f => f.def.spd))) * (this.alive().some(f => f.def.boss) ? .6 : 1);
+        const ch = escapeChance(st.spd, Math.max(...this.alive().map(f => this.foeSpeed(f)))) * (this.alive().some(f => f.def.boss) ? .6 : 1);
         if (Math.random() < ch) { await this.say(`大家一溜煙地跑走了！`, 800); return 'escape'; }
         await this.say('逃跑失敗了……被擋住了！', 800); break;
       }
       case 'talk': {
-        if (this.antlerBattle) {
-          const base = this.vineRatio > .5 ? 1 : 2;
-          await this.soothe(base + (heroTier(s.courage) >= 2 ? 1 : 0),
+        if (this.careBattle) {
+          const base = this.obstacleRatio > .5 ? 1 : 2;
+          const bonus = Number(this.flagCheer) + (this.fanerBattle ? this.purrBonus : 0);
+          this.flagCheer = false;
+          this.purrBonus = 0;
+          await this.soothe(base + bonus + Number(heroTier(s.courage) >= 2),
             `${nm}：「別怕，我們在這裡。」`);
+          if (this.fanerBattle && !s.flags.c3_faner_talked) {
+            s.flags.c3_faner_talked = true;
+            G.gainStat('friendship', 2, '和帆耳說話，陪牠安心下來。');
+          }
           break;
         }
         const f = c.foe!; const fx = this.fx;
@@ -624,7 +820,7 @@ export class BattleScene extends Phaser.Scene {
       await this.soothe(2, '心情對了！苔角覺得好多了。');
       return;
     }
-    f.hp = Math.min(f.def.hp, f.hp + n);
+    f.hp = Math.min(f.def.hp, f.hp + boostedHealing(n, G.s.love));
     sfx.heal();
     await this.matchMood(f);
   }
@@ -645,7 +841,7 @@ export class BattleScene extends Phaser.Scene {
   async shareFood(f: Foe, item: string) {
     const liked = f.def.likesFood;
     if (liked !== true && !(Array.isArray(liked) && liked.includes(item))) {
-      await this.say('牠聞了聞，好像不餓。');
+      await this.say(f.def.foodRefusal ?? '牠聞了聞，好像不餓。');
       return;
     }
     const s = G.s;
@@ -657,7 +853,7 @@ export class BattleScene extends Phaser.Scene {
       this.sharedKindness = true;
       G.addKindness(1);
     }
-    await this.say(`${f.label}：「謝謝妳分我吃！」牠收下${ITEMS[item].name}，開心地離開了。`, 1600);
+    await this.say(`${f.label}：「${f.def.foodReply ?? '謝謝妳分我吃！'}」牠收下${ITEMS[item].name}，開心地離開了。`, 1600);
     await this.leaveGift(f);
     notify(s, 'resolve', f.def.id);
   }
@@ -672,6 +868,7 @@ export class BattleScene extends Phaser.Scene {
     if (a.coveredBy) { const c = this.ally(a.coveredBy); if (c && this.hp(c.id) > 0) { tgt = c; covered = true; } }
     const st = memberStats(s, tgt.id);
     let d = calcDamage(f.def.atk * f.atkUp, st.def, power, tgt.defend || covered); if (tgt.guardUp) d = Math.max(1, Math.round(d * 0.65));
+    if (s.honesty > 0 && this.ally('hero')?.defend) d = Math.max(1, Math.round(d * (1 - guardReduction(s.honesty))));
     const partner = tgt.sharedWith ? this.ally(tgt.sharedWith) : undefined;
     if (partner && this.hp(partner.id) > 0) {
       const share = Math.floor(d / 2);
@@ -683,20 +880,30 @@ export class BattleScene extends Phaser.Scene {
   }
   private async takeHit(tgt: Ally, d: number, message: string) {
     if (d <= 0) return;
+    if (this.flagGuard) {
+      this.flagGuard = false;
+      d = Math.max(1, Math.ceil(d / 2));
+      message += '看見黃旗了！橋上的朋友拉住繩子，擋掉一半傷害。';
+    }
+    if (tgt.cushionTurn === this.turn) {
+      tgt.cushionTurn = undefined;
+      d = Math.max(1, Math.ceil(d / 2));
+      message += '船墊擋掉了一半傷害！';
+    }
     const m = G.s.members[tgt.id];
-    const stoodUp = this.antlerBattle && m.hp - d <= 0;
-    m.hp = Math.max(this.antlerBattle ? 1 : 0, m.hp - d); sfx.hurt(); this.cameras.main.shake(120, .004);
+    const stoodUp = this.careBattle && m.hp - d <= 0;
+    m.hp = Math.max(this.careBattle ? 1 : 0, m.hp - d); sfx.hurt(); this.cameras.main.shake(120, .004);
     if (tgt.sleep) tgt.sleep = 0;
     this.renderParty(); this.partyEl.querySelector(`[data-id="${tgt.id}"]`)?.classList.add('hit');
     await this.say(`${message}${this.name(tgt.id)}受到 ${d} 點傷害。${tgt.defend ? '（防禦中，傷害減半！）' : ''}`, 800);
-    if (stoodUp) await this.say(`${this.name(tgt.id)}跌倒了，又站起來了！`, 800);
+    if (stoodUp) await this.say(this.fanerBattle ? `小白貓扶${this.name(tgt.id)}站好。「我們再試一次喵！」` : `${this.name(tgt.id)}跌倒了，又站起來了！`, 800);
     else if (m.hp <= 0) await this.say(`${this.name(tgt.id)}倒下了……`, 800);
   }
   async doFoe(f: Foe) {
-    if (this.antlerBattle) {
-      if (f !== this.antler) return;
-      if (this.calm === CALM_MAX) { await this.say('苔角縮著身子，輕輕發抖。'); return; }
-      f.atkUp = .4 + .6 * this.vineRatio;
+    if (this.careBattle) {
+      if (f !== this.creature) return;
+      if (this.calm === CALM_MAX) { await this.say(this.fanerBattle ? '帆耳安靜地等妳解開橋索。' : '苔角縮著身子，輕輕發抖。'); return; }
+      f.atkUp = .4 + .6 * this.obstacleRatio;
     }
     if (f.sleep) {
       f.sleep--;
@@ -704,7 +911,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     const s = G.s;
-    const sk = f.def.skills?.find(k => !(this.antlerBattle && this.vine.gone && k.status === 'bind') && (!k.mimic || this.lastSkill) && Math.random() < k.chance && !(k.call && (f.called || this.alive().length >= 3)) && !(k.roar && f.atkUp >= 1.6) && !(k.steal && (f.stole || !Object.entries(s.inventory).some(([i, n]) => n > 0 && ITEMS[i].battle))));
+    const sk = f.def.skills?.find(k => !(this.careBattle && this.obstacle.gone && k.status === 'bind') && (!k.mimic || this.lastSkill) && Math.random() < k.chance && !(k.call && (f.called || this.alive().length >= 3)) && !(k.roar && f.atkUp >= 1.6) && !(k.steal && (f.stole || !Object.entries(s.inventory).some(([i, n]) => n > 0 && ITEMS[i].battle))));
     this.tweens.add({ targets: f.spr, y: f.spr.y + 26, duration: 120, yoyo: true });
     if (sk?.call) {
       f.called = true; await this.say(`${f.label}「嗷嗚——！」大聲叫同伴！`, 900);
@@ -730,7 +937,7 @@ export class BattleScene extends Phaser.Scene {
       return;
     }
     const copied = sk?.mimic ? this.lastSkill : null;
-    await this.say(copied ? `${f.label}跟著模仿「${copied.name}」！` : sk ? `${f.label}${this.antlerBattle && this.vineRatio <= .5 ? '輕輕' : ''}使出「${sk.name}」！` : `${f.label}撲了過來！`, 550);
+    await this.say(copied ? `${f.label}跟著模仿「${copied.name}」！` : sk ? `${f.label}${this.careBattle && this.obstacleRatio <= .5 ? '輕輕' : ''}使出「${sk.name}」！` : `${f.label}撲了過來！`, 550);
     if (copied?.power === 0) return;
     if (this.helperGuard) {
       this.helperGuard = false;

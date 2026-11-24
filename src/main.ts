@@ -14,6 +14,12 @@ import './data/ch2_echo';
 import './data/ch2_finale';
 import './data/ch2_bonds';
 import './data/ch2_remaining_sides';
+import { BANKS_REST } from './data/ch3_maps';
+import './data/ch3_story';
+import './data/ch3_finale';
+import './data/ch3_collection';
+import './data/ch3_sides';
+import './data/ch3_school';
 import { isChapter2Map } from './core/hearts';
 import { MIST_ENTRANCE, ROOT_REST } from './data/ch2_maps';
 import { G } from './core/game';
@@ -30,16 +36,21 @@ import { DIALOGUES } from './data/dialogues';
 import { GLINTS, TRIGGERS } from './data/maps';
 import { QUESTS } from './data/quests';
 import { check } from './core/conditions';
+import { letterExample, letterReplyExample } from './data/letters';
 
 const IMAGES = ['teasnail', 'flipmush', 'w_teatable', 'w_teapot', 'w_ftree', 'w_rsign', 'yuanyuan', 'yuanyuan_big', 'lulu', 'lulu_big', 'juanjuan', 'juanjuan_big', 'w_clock', 'w_shelf', 'w_shelf_ud', 'w_dew', 'w_cookie', 'w_hedge', 'w_sunflower', 'w_tulip', 'w_bell', 'w_circle', 'w_mushflower', 'w_gear', 'w_ladder', 'f_rocker_ud', 'f_plant_ud', 'f_barrel_ud', 'guard_spar', 'ali_feast', 'mint_feast', 'yuzu_feast', 'f_bed', 'f_table', 'f_shelf', 'f_fireplace', 'f_barrel', 'f_counter', 'f_anvil', 'f_loom', 'f_flowers', 'f_stove', 'f_herbs', 'f_sacks', 'f_plant', 'f_cupboard', 'f_rocker', 'hero_big', 'whitecat', 'whitecat_big', 'elder', 'elder_big', 'guard', 'guard_big', 'merchant', 'merchant_big', 'innkeeper', 'innkeeper_big', 'farmer', 'farmer_big', 'mochimom', 'mochimom_big', 'douhua', 'douhua_big',
   'slime', 'slime_small', 'house', 'ali', 'ali_big', 'mint', 'mint_big', 'yuzu', 'yuzu_big', 'ginkgo', 'ginkgo_big', 'gugu', 'gugu_big', 'goblin', 'sprout', 'sprout_big', 'chief', 'chief_big', 'fgoblin', 'fgoblin_big', 'fgoblin_b',
   'rock_boss', 'rock_map', 'rock_big', 'wolf', 'mushroom', 'bat', 'forestbg', 'ftree', 'glowshroom', 'tent', 'campfire', 'log', 'veggies', 'lantern_off', 'lantern_on', 'cabbage', 'sign', 'gate', 'stump', 'inn', 'elderhouse', 'fountain', 'tree', 'fence', 'fishrack', 'stall', 'hay', 'flowerpot', 'dummy', 'lamp', 'battlebg',
   'cotton', 'cotton_big', 'toast', 'toast_big', 'charcoal', 'charcoal_big', 'nori', 'nori_big', 'weaver', 'weaver_big', 'lei', 'lei_big', 'afu', 'afu_big', 'mailbox', 'box', 'letter', 'flowershop', 'smithy', 'weaveshop', 'belltower', 'windmill',
+  'mizhou', 'mizhou_big', 'xiaosui', 'xiaosui_big', 'diandian', 'diandian_big',
+  'bridgebg', 'faner_map', 'faner_boss', 'faner_calm', 'ropeknot_boss', 'c3_seedpot', 'c3_ending',
+  'reedbg', 'reedpuff', 'footchestnut', 'c3_reeds', 'c3_post', 'c3_bucket',
   'pudding', 'pudding_big', 'mistpuff', 'thornling', 'cryshroom', 'mistwolf', 'yarnweasel', 'mistbg',
   'manman', 'manman_big', 'echobat', 'mossrock', 'c2_softmoss', 'c2_sleepflower', 'c2_boat', 'c2_rootwall', 'echobg',
   'denbg', 'mossantler_boss', 'sighvine_boss', 'mossantler_calm', 'c2_thorn', 'c2_seed', 'c2_cake', 'c2_birdhouse', 'c2_ending',
   'pengpeng', 'pengpeng_big', 'squirrelkid', 'mossantler_map',
   'c2_bigtree', 'c2_house_broken', 'c2_house_fixed', 'c2_door', 'c2_vine', 'c2_net', 'c2_mosslog',
+  'c3_letter', 'c3_flag', 'c3_ferry', 'c3_clappers',
   'c2_cloudline', 'c2_lamp_off', 'c2_lamp_on', 'c2_planks', 'c2_footprint',
 ];
 
@@ -108,11 +119,12 @@ async function runBattle(game: Phaser.Game, id: string, fixed: boolean): Promise
     const camp = s.map === 'forest' && s.quests.main10?.status === 'done';
     const inChapter2 = isChapter2Map(s.map);
     const rootRest = s.quests.c2m4?.status === 'done';
-    const rescue = inChapter2
+    const riverside = MAPS[s.map].riverbank;
+    const rescue = riverside ? { map: 'twobanks', ...BANKS_REST } : inChapter2
       ? { map: rootRest ? 'rootvillage' : 'mistpath', ...(rootRest ? ROOT_REST : MIST_ENTRANCE) }
       : camp ? { map: 'forest', x: 5 * 32 + 40, y: 29 * 32 + 40 } : { map: 'village', x: 208, y: 446 };
     const { map: rm, x: rx, y: ry } = rescue;
-    const place = inChapter2 ? (rootRest ? '大樹根村' : '紫霧林道入口') : camp ? '營火旁邊' : '村莊';
+    const place = riverside ? '兩岸村的船棚' : inChapter2 ? (rootRest ? '大樹根村' : '紫霧林道入口') : camp ? '營火旁邊' : '村莊';
     healAll(s); s.map = rm; s.x = rx; s.y = ry; s.dir = 0;
     await G.ui.fade('', true);
     game.scene.wake('World'); world.placePlayer(rm, rx, ry, 0);
@@ -140,4 +152,10 @@ const game = new Phaser.Game({
   input: { activePointers: 3 },
 });
 // 測試用：網址加上 ?debug=1 可以在主控台使用 __mcv
-if (new URLSearchParams(location.search).has('debug')) (window as any).__mcv = { G, game, NPCS, check, DIALOGUES, GLINTS, TRIGGERS, QUESTS, MAPS, WONDERS, FIXED };
+if (new URLSearchParams(location.search).has('debug')) (window as any).__mcv = {
+  joinMizhou() {
+    G.recruit('mizhou');
+    return G.exec({ type: 'swapIn', id: 'mizhou' });
+  },
+  letterExample, letterReplyExample,
+  G, game, NPCS, check, DIALOGUES, GLINTS, TRIGGERS, QUESTS, MAPS, WONDERS, FIXED };

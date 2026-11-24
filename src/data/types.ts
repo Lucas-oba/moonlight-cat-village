@@ -1,4 +1,5 @@
 import type { Voice } from '../core/sfx';
+import type { ReplyToLetter, WriteLetter } from './letters';
 // 資料驅動的型別定義：之後的章節只要新增資料檔即可擴充。
 export type Cond = {
   questActive?: string; questDone?: string; questNotDone?: string; questAvailable?: string; questNotStarted?: string;
@@ -10,6 +11,8 @@ export type Cond = {
 };
 
 export type Action =
+  | WriteLetter
+  | ReplyToLetter
   | { type: 'startQuest'; id: string }
   | { type: 'obj'; quest: string; obj: string; n?: number }
   | { type: 'item'; id: string; n?: number }
@@ -17,6 +20,7 @@ export type Action =
   | { type: 'buy'; id: string; price: number }
   | { type: 'flag'; id: string; value?: boolean }
   | { type: 'stat'; courage?: number; kindness?: number; observation?: number }
+  | { type: 'stat'; key: import('../core/hearts').ChapterStat; n: number; event?: string }
   | { type: 'exp'; n: number }
   | { type: 'sticker'; id: string }
   | { type: 'systemActivate' }
@@ -35,7 +39,7 @@ export type Action =
   | { type: 'guest'; id: string | null }
   | { type: 'title'; id: string }
   | { type: 'music'; id: string | null }
-  | { type: 'chapterEnd'; chapter?: 2 }
+  | { type: 'chapterEnd'; chapter?: 2 | 3 }
   | { type: 'c2Breeze' }
   | { type: 'take'; id: string; n?: number }
   | { type: 'shop'; items: { id: string; price: number; when?: Cond }[]; title?: string }
@@ -45,7 +49,7 @@ export type Action =
   | { type: 'shake'; ms?: number }
   | { type: 'dim' }
   | { type: 'stage'; playerLift?: number; at?: { x: number; y: number; dir?: number } }
-  | { type: 'walkOff'; npc: string; x: number; y: number; ms: number; ride?: boolean }
+  | { type: 'walkOff'; npc: string; x: number; y: number; ms: number; ride?: boolean; passenger?: string }
   | { type: 'quiz'; subject?: 'math' | 'english' | 'science' | 'chinese' | 'mix'; tier?: number; n?: number; by?: string; title?: string; ids?: string[] }
   | { type: 'learn'; id: string; skill: string }
   | { type: 'equip'; id: string }
@@ -59,7 +63,7 @@ export type Action =
   | { type: 'abort' };
 
 type Choice = { label: string; act?: Action[]; next?: string; when?: Cond } & (
-  { brave: true; braveId: string; surprise: string; minCourage?: number; chapter?: 2 } |
+  { brave: true; braveId: string; surprise: string; minCourage?: number; chapter?: 2 | 3 } |
   { brave?: never; minCourage?: never }
 );
 export interface Line {
@@ -79,7 +83,7 @@ export type ObjType = 'talk' | 'reach' | 'collect' | 'defeat' | 'inspect' | 'res
 export interface Objective { id: string; type: ObjType; text: string; targets?: string[]; count?: number; unique?: boolean; marker?: string[]; auto?: Cond; }
 export interface Reward { exp?: number; money?: number; items?: { id: string; n: number }[]; courage?: number; observation?: number; flags?: string[]; sticker?: string; }
 export interface QuestDef {
-  id: string; chapter?: 2; kind: 'main' | 'side'; no: number; title: string; giver?: string; summary: string;
+  id: string; chapter?: 2 | 3; kind: 'main' | 'side'; no: number; title: string; giver?: string; summary: string;
   prereq: string[]; bond?: [string, number]; autoStart?: boolean; autoStartAfter?: string; ordered?: boolean; objectives: Objective[];
   rewards: Reward; rewardText?: string[]; unlocks?: string[]; onComplete?: string; comingSoon?: boolean;
 }
@@ -93,6 +97,7 @@ export interface EnemyDef {
   skills?: { id: string; name: string; chance: number; power: number; status?: 'sticky' | 'stun' | 'sleep' | 'bind' | 'cry'; target?: 'all'; roar?: boolean; steal?: boolean; call?: boolean; flee?: boolean; mimic?: boolean; doze?: boolean }[];
   boss?: { lateTurn: number; lateHp: number; lateTalk: number; earlyTalk: number; lateLines: string[]; earlyLines: string[] };
   likesFood?: boolean | string[];
+  foodReply?: string; foodRefusal?: string;
   talkBonus?: { when: Cond; add: number };
   sticker?: string; // 貼紙用的魔物種類（同種魔物共用）
 }
@@ -123,5 +128,5 @@ export interface WonderDef { id: string; map: string; x: number; y: number; mode
 export interface TriggerDef { id: string; map: string; when?: Cond; once: string; d: string; zone?: { x: number; y: number; w: number; h: number }; }
 export interface MapDef {
   id: string; name: string; tiles: string[]; props: PropDef[]; exits: ExitDef[]; zones: ZoneDef[];
-  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss' | 'mist' | 'roots' | 'echo'; mist?: boolean; labels?: { x: number; y: number; text: string; when?: Cond }[]; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
+  encounter?: string; indoor?: boolean; trees?: boolean; music?: 'village' | 'field' | 'forest' | 'boss' | 'mist' | 'roots' | 'echo' | 'reed' | 'banks'; riverbank?: boolean; mist?: boolean; labels?: { x: number; y: number; text: string; when?: Cond }[]; forest?: boolean; flipTrees?: boolean; nightAlways?: boolean; guidePaw?: { when: Cond; points: [number, number][] };
 }

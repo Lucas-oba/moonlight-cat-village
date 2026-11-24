@@ -47,13 +47,23 @@ export class WorldScene extends Phaser.Scene {
     this.playerLift = 0; this.mistOverlay = undefined; this.vignette = undefined;
     this.npcs = []; this.glints = []; this.condProps = []; this.paws = []; this.followers = []; this.trail = []; this.glows = []; this.path = []; this.pathTarget = null;
     const s = G.s; this.map = MAPS[s.map]; s.size = 'normal'; this.wonderSprs = []; this.activeWonder = null; this.nearWonder = null;
-    const valley = this.map.id === 'echovalley';
+    const valley = this.map.id === 'echovalley' || this.map.riverbank;
     const gk = 'ground_' + this.map.id;
-    if (!this.textures.exists(gk)) buildGround(this, gk, this.map.tiles, !!this.map.forest, this.map.mist, valley);
+    const headroom = this.map.riverbank ? 5 * TILE : 0;
+    if (!this.textures.exists(gk)) {
+      // 河面延伸到地圖外，捲動到出口時仍能在任務提示下方、搖桿上方點路。
+      const tiles = this.map.tiles;
+      const shore = (row: string, n: number) => Array<string>(n).fill(row.replace(/[TC]/g, 'k'));
+      const ground = this.map.riverbank
+        ? [...shore(tiles[0], headroom / TILE), ...tiles, ...shore(tiles[tiles.length - 1], 6)]
+        : tiles;
+      buildGround(this, gk, ground, !!this.map.forest, this.map.mist, valley, this.map.riverbank);
+    }
     if (valley) buildValleyDecor(this);
     const W = this.map.tiles[0].length * TILE, H = this.map.tiles.length * TILE;
-    this.add.image(0, 0, gk).setOrigin(0).setDepth(-10);
+    this.add.image(0, -headroom, gk).setOrigin(0).setDepth(-10);
     if (this.map.indoor) this.cameras.main.setBounds(0, -40, W, H + 160).setBackgroundColor('#1b120c');
+    else if (this.map.riverbank) this.cameras.main.setBounds(0, -headroom, W, H + headroom + 180).setBackgroundColor('#8ab768');
     else this.cameras.main.setBounds(-16, -70, W + 32, H + 230).setBackgroundColor(valley ? '#85757b' : this.map.forest ? '#13241c' : '#2d5a2a');
     this.blocked = this.map.tiles.map(row => [...row].map(ch => SOLID.includes(ch)));
     // 樹牆
@@ -63,7 +73,11 @@ export class WorldScene extends Phaser.Scene {
       this.add.image(x * TILE + 16 + j, y * TILE + 30, this.map.forest ? 'ftree' : 'tree').setOrigin(.5, 1).setScale((this.map.forest ? .74 : .62) + ((x + y) % 3) * .05).setDepth(y * TILE + 30);
     }));
     // 地圖外圍的裝飾樹（讓畫面捲到控制鈕上方時不會露出空白）
-    if (this.map.trees) for (let yy = H + 34; yy < H + 260; yy += 40) for (let xx = -10; xx < W + 20; xx += 34) this.add.image(xx + ((yy / 40) % 2) * 17, yy, this.map.flipTrees ? 'w_ftree' : this.map.forest ? 'ftree' : 'tree').setOrigin(.5, 1).setScale(this.map.flipTrees ? .62 : this.map.forest ? .74 : .62).setDepth(yy).setTint(0xb8c8b0);
+    if (this.map.trees) for (let yy = H + 34; yy < H + 260; yy += 40) for (let xx = -10; xx < W + 20; xx += 34) {
+      const bank = this.map.tiles[this.map.tiles.length - 1][Math.floor(xx / TILE)];
+      if (this.map.riverbank && bank !== 'T') continue;
+      this.add.image(xx + ((yy / 40) % 2) * 17, yy, this.map.flipTrees ? 'w_ftree' : this.map.forest ? 'ftree' : 'tree').setOrigin(.5, 1).setScale(this.map.flipTrees ? .62 : this.map.forest ? .74 : .62).setDepth(yy).setTint(0xb8c8b0);
+    }
     // 小溪閃光
     this.map.tiles.forEach((row, y) => [...row].forEach((ch, x) => {
       if ((ch !== 'w' && ch !== 'v') || (x * 3 + y) % 4 !== 0) return;
@@ -255,10 +269,18 @@ export class WorldScene extends Phaser.Scene {
         onComplete: () => { seed.destroy(); resolve(); } });
     });
   }
-  async walkOff(id: string, x: number, y: number, duration: number, ride = false) {
+  async walkOff(id: string, x: number, y: number, duration: number, ride = false, passengerId?: string) {
     const n = this.npcs.find(n => n.def.id === id);
     if (!n) return;
     this.tweens.killTweensOf(n.spr);
+    const passenger = passengerId && this.npcs.find(other => other.def.id === passengerId);
+    if (passenger) {
+      const seatX = ride ? 17 : 0;
+      passenger.sh.setVisible(false);
+      passenger.mark.setVisible(false);
+      passenger.spr.setPosition(n.spr.x + seatX, n.spr.y - 16).setDepth(n.spr.depth + 1);
+      this.tweens.add({ targets: passenger.spr, x: x + seatX, y: y - 16, duration });
+    }
     if (ride) {
       this.player.setPosition(n.spr.x, n.spr.y + 1);
       this.playerLift = 16;
@@ -268,7 +290,7 @@ export class WorldScene extends Phaser.Scene {
       this.tweens.add({
         targets: ride ? [n.spr, this.player] : [n.spr, n.sh],
         x, y: (target: unknown) => target === this.player ? y + 1 : y,
-        ...(ride ? {} : { alpha: 0 }), duration, onComplete: () => resolve(),
+        ...(ride || passenger ? {} : { alpha: 0 }), duration, onComplete: () => resolve(),
       });
     });
     if (ride) this.playerLift = 0;
@@ -514,7 +536,7 @@ export class WorldScene extends Phaser.Scene {
     if (G.busy > 0 || (s.size && s.size !== 'normal')) return;
     const cur = currentObjective(s, 'main6');
     if (cur?.id === 'tutorial') { const n = s.quests.main6.prog.tutorial ?? 0; this.startBattle(['tut1', 'tut2', 'tut3'][n], true); return; }
-    const enabled = isChapter2Map(s.map) || (s.quests.main6 && objDone(s, 'main6', 'tutorial'));
+    const enabled = this.map.riverbank || isChapter2Map(s.map) || (s.quests.main6 && objDone(s, 'main6', 'tutorial'));
     if (!enabled) return;
     const { x, y } = this.player;
     const zone = this.map.zones.find(z => z.encounter && x >= z.x && x < z.x + z.w && y >= z.y && y < z.y + z.h);
