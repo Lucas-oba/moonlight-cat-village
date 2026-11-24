@@ -9,11 +9,25 @@ export function heroTier(courage: number) {
   return [5, 12, 20, 30].filter(n => courage >= n).length;
 }
 export function heroTitle(courage: number) { return HERO_TITLES[heroTier(courage)]; }
-export const newJournal = () => ({ brave: 0, secrets: 0, friends: 0, helps: 0 });
+export const CHAPTER_STATS = {
+  friendship: { chapter: 3, label: '🤝 友誼值', first: '妳出招時，夥伴有機會接著打一下。' },
+  honesty: { chapter: 4, label: '🔔 誠實與負責值', first: '妳選防禦時，也能保護大家。' },
+  love: { chapter: 5, label: '💞 愛心值', first: '幫忙補血時，可以多補一點。' },
+  hope: { chapter: 6, label: '✨ 希望值', first: '有人快沒力氣時，大家有機會一起回血。' },
+} as const;
+export type ChapterStat = keyof typeof CHAPTER_STATS;
+export const newJournal = () => ({ brave: 0, secrets: 0, friends: 0, helps: 0, friendship: 0, friendshipEvents: [] as string[] });
 export const isChapter2Map = (map: string) => ['mistpath', 'rootvillage', 'echovalley'].includes(map) || map.startsWith('c2_');
 export function chapterOf(s: GameState) {
-  const start = s.quests.c2m1?.status;
-  return start === 'active' || start === 'done' || isChapter2Map(s.map) ? 2 : 1;
+  for (let chapter = 6; chapter >= 2; chapter--) {
+    const start = s.quests[`c${chapter}m1`]?.status;
+    if (start === 'active' || start === 'done') return chapter;
+  }
+  return isChapter2Map(s.map) ? 2 : 1;
+}
+export function visibleStats(s: GameState) {
+  const chapter = chapterOf(s);
+  return (Object.keys(CHAPTER_STATS) as ChapterStat[]).filter(key => s[key] > 0 || chapter >= CHAPTER_STATS[key].chapter);
 }
 export const CH1_KIND_EVENTS = [
   { id: 'vegetables', quest: 'main10', n: 2 },
@@ -78,4 +92,5 @@ export const HELPERS: Record<string, 'heal' | 'guard' | 'cheer'> = {
   slime: 'heal', mistpuff: 'heal', mushroom: 'heal', teasnail: 'heal', flipmush: 'heal',
   goblin: 'guard', fgoblin: 'guard', wolf: 'guard', mistwolf: 'guard', gugu: 'guard', rock: 'guard',
   bat: 'cheer', cryshroom: 'cheer', thornling: 'cheer', yarnweasel: 'cheer', echobat: 'cheer', mossrock: 'cheer',
+  reedpuff: 'cheer', footchestnut: 'guard',
 };

@@ -1,4 +1,5 @@
 import type { Action, Dialogue, Line } from '../data/types';
+import type { SavedLetter, WriteLetter } from '../data/letters';
 import { DIALOGUES, INN_TALKS } from '../data/dialogues';
 import { NPCS } from '../data/npcs';
 import { ITEMS, STICKERS } from '../data/items';
@@ -6,18 +7,22 @@ import { ENEMIES } from '../data/enemies';
 import { QUESTS } from '../data/quests';
 import { type GameState, newState, saveGame, healAll, addExp } from './state';
 import { bus } from './bus';
-import { advance, startQuest, notify, refreshAvailability, currentObjective } from './quests';
+import { advance, startQuest, notify, refreshAvailability, currentObjective, questChapterPrefix } from './quests';
 import { check } from './conditions';
 import { sfx } from './sfx';
 import { music } from './music';
 import { blockTaps } from './tapguard';
 import { MAX_BOND, MEMBERS } from '../data/characters';
-import { awardKindEvents, chapterOf, heroTier } from './hearts';
-import { memberStats } from './state';
+import { awardKindEvents, chapterOf, CHAPTER_STATS, heroTier, type ChapterStat } from './hearts';
+import { addStat, memberStats } from './state';
 class AbortDialogue extends Error {}
 
 export interface DialogueUI { show(line: { name?: string; text: string; kind: 'npc' | 'hero' | 'system' | 'narr'; portrait?: string; portraitH?: number; think?: boolean; flashBow?: boolean; glitch?: boolean; choices?: { label: string; brave?: true; locked?: boolean }[] }): Promise<number>; hide(): void; }
-export interface UIHooks { chapterEnd(chapter?: 2): Promise<void>; celebrate(tier: number): Promise<void>; shop(items: { id: string; price: number }[], title?: string): Promise<void>; dialogue: DialogueUI; activateSystem(): Promise<void>; openPanel(tab: string): Promise<void>; reward(title: string, lines: string[]): Promise<void>; fade(text?: string, white?: boolean): Promise<void>; unfade(): Promise<void>; toast(t: { title: string; text: string }): void; refresh(): void; quiz(o: any): Promise<number>; travel(): Promise<void>; stickerBoard(): Promise<void>; trade(): Promise<void>; }
+export interface UIHooks {
+  writeLetter(a: WriteLetter): Promise<SavedLetter>;
+  readLetter(letter: SavedLetter): Promise<void>;
+  chapterEnd(chapter?: 2 | 3): Promise<void>; celebrate(tier: number): Promise<void>; shop(items: { id: string; price: number }[], title?: string): Promise<void>; dialogue: DialogueUI; activateSystem(): Promise<void>; openPanel(tab: string): Promise<void>; reward(title: string, lines: string[]): Promise<void>; fade(text?: string, white?: boolean): Promise<void>; unfade(): Promise<void>; toast(t: { title: string; text: string }): void; refresh(): void; quiz(o: any): Promise<number>; travel(): Promise<void>; stickerBoard(): Promise<void>; trade(): Promise<void>;
+}
 
 class GameController {
   s: GameState = newState();
@@ -33,7 +38,7 @@ class GameController {
     bus.on('questComplete', ({ def, lines }) => {
       this.enqueue(async () => {
         sfx.reward();
-        await this.ui.reward(`${def.chapter === 2 ? '第二章・' : ''}${def.kind === 'main' ? '主線' : '支線'} ${def.no}「${def.title}」完成喵！`, lines);
+        await this.ui.reward(`${questChapterPrefix(def.chapter)}${def.kind === 'main' ? '主線' : '支線'} ${def.no}「${def.title}」完成喵！`, lines);
         if (def.onComplete) await this.run(def.onComplete);
       });
     });
@@ -47,7 +52,17 @@ class GameController {
     this.s.quests.main1.status = 'done';
     refreshAvailability(this.s); // main2 自動開始
   }
-  load(s: GameState) { this.s = s; refreshAvailability(this.s); }
+  load(s: GameState) {
+    this.s = s;
+    // 第三章試玩存檔可能已走過河岸，補上當時還沒有的任務貼紙。
+    for (const q of Object.values(QUESTS)) {
+      const id = q.rewards.sticker;
+      if (q.chapter === 3 && id && s.quests[q.id]?.status === 'done' && !s.stickers.includes(id)) {
+        s.stickers.push(id);
+      }
+    }
+    refreshAvailability(s);
+  }
   checkKindEvents() {
     const n = awardKindEvents(this.s);
     if (n) this.ui.toast({ title: `💗 善良值 +${n}`, text: '' });
@@ -163,6 +178,29 @@ class GameController {
         sfx.ok(); this.ui.toast({ title: '隊伍', text: `${MEMBERS[a.id].name}上場了！` }); this.world?.refreshWorld?.(); break;
       }
       case 'trade': this.ui.dialogue.hide(); await this.ui.trade(); break;
+      case 'letter': {
+        this.ui.dialogue.hide();
+        const existing = s.letters.find(letter => letter.id === a.id);
+        if (existing) await this.ui.readLetter(existing);
+        else {
+          const letter = await this.ui.writeLetter(a);
+          if (!s.letters.some(saved => saved.id === a.id)) {
+            s.letters.push(letter);
+            this.ui.toast({ title: letter.mode === 'oral' ? '記好口信了' : '把信收進背包了', text: '' });
+          }
+        }
+        break;
+      }
+      case 'letterReply': {
+        const letter = s.letters.find(saved => saved.id === a.id);
+        if (!letter) break;
+        this.ui.dialogue.hide();
+        const firstDelivery = !s.letters.some(saved => saved.reply !== undefined);
+        letter.reply ??= a.message;
+        if (firstDelivery) this.gainStat('friendship', 2, `幫${letter.from}把話帶給${letter.to}。`);
+        await this.ui.readLetter(letter);
+        break;
+      }
       case 'travel': this.ui.dialogue.hide(); await this.ui.travel(); break;
       case 'stickerBoard': this.ui.dialogue.hide(); await this.ui.stickerBoard(); break;
       case 'bond': this.bondUp(a.id, a.n ?? 1, a.level); break;
@@ -181,7 +219,14 @@ class GameController {
         else this.ui.toast({ title: '魚乾幣不夠', text: `需要 ${a.price} 魚乾幣` });
         break;
       case 'flag': s.flags[a.id] = a.value ?? true; break;
-      case 'stat': if (a.courage) s.courage = Math.max(0, s.courage + a.courage); if (a.observation) s.observation += a.observation; if (a.kindness) this.addKindness(a.kindness); break;
+      case 'stat':
+        if ('key' in a) this.gainStat(a.key, a.n, a.event);
+        else {
+          if (a.courage) s.courage = Math.max(0, s.courage + a.courage);
+          if (a.observation) s.observation += a.observation;
+          if (a.kindness) this.addKindness(a.kindness);
+        }
+        break;
       case 'exp': addExp(s, a.n).forEach(u => bus.emit('levelUp', u)); break;
       case 'sticker': if (!s.stickers.includes(a.id)) { s.stickers.push(a.id); this.ui.toast({ title: '新貼紙', text: STICKERS[a.id] ?? a.id }); } break;
       case 'systemActivate':
@@ -220,9 +265,7 @@ class GameController {
         break;
       }
       case 'recruit': {
-        this.ensureMember(a.id); s.members[a.id].joined = true; (s.bonds ??= {})[a.id] = Math.max(1, s.bonds[a.id] ?? 0); if (s.guest === a.id) s.guest = null;
-        if (!s.party.includes(a.id) && s.party.length < 3) s.party.push(a.id);
-        refreshAvailability(s);
+        this.recruit(a.id);
         sfx.newFriend(); await this.ui.reward(`${MEMBERS[a.id].name}加入隊伍了喵！`, [`${MEMBERS[a.id].name}（${MEMBERS[a.id].role}）`, s.party.includes(a.id) ? '已經在隊伍裡，會跟著妳走' : '隊伍滿了，在「隊伍」頁可以換人']);
         break;
       }
@@ -231,11 +274,12 @@ class GameController {
       case 'music': music.play(a.id as any); break;
       case 'chapterEnd':
         this.ui.dialogue.hide();
-        if (a.chapter === 2) {
-          s.chapter2Done = true;
+        if (a.chapter) {
+          if (a.chapter === 3) s.chapter3Done = true;
+          else s.chapter2Done = true;
           this.save();
-          await this.ui.chapterEnd(2);
-          await this.ui.openPanel('journal2');
+          await this.ui.chapterEnd(a.chapter);
+          await this.ui.openPanel('journal' + a.chapter);
         } else {
           s.chapterDone = true;
           await this.ui.chapterEnd();
@@ -250,7 +294,7 @@ class GameController {
       case 'fog': this.world?.fogBurst?.(a.x, a.y, a.n ?? 8); break;
       case 'shake': this.world?.cameras?.main?.shake(a.ms ?? 500, 0.01); break;
       case 'stage': this.world?.stage(a.playerLift, a.at); break;
-      case 'walkOff': await this.world?.walkOff(a.npc, a.x, a.y, a.ms, a.ride); break;
+      case 'walkOff': await this.world?.walkOff(a.npc, a.x, a.y, a.ms, a.ride, a.passenger); break;
       case 'dim': this.world?.moonDim?.(); break;
       case 'sfx': (sfx as any)[a.id]?.(); break;
     }
@@ -269,6 +313,13 @@ class GameController {
       }
     } finally { this.autoBusy = false; }
   }
+  gainStat(key: ChapterStat, n: number, event?: string) {
+    const first = this.s[key] === 0;
+    if (!addStat(this.s, key, n, event)) return;
+    const stat = CHAPTER_STATS[key];
+    this.ui.toast({ title: `${stat.label} +${n}`, text: first ? stat.first : '' });
+    this.ui.refresh();
+  }
   addKindness(n: number) {
     if (!Number.isFinite(n) || n <= 0) return;
     const first = this.s.kindness === 0 && !this.s.flags.kindness_explained;
@@ -282,9 +333,20 @@ class GameController {
     });
     this.ui.refresh();
   }
+  recruit(id: string) {
+    this.ensureMember(id);
+    const s = this.s;
+    s.members[id].joined = true;
+    const bonds = s.bonds ??= {};
+    bonds[id] = Math.max(1, bonds[id] ?? 0);
+    if (s.guest === id) s.guest = null;
+    if (!s.party.includes(id) && s.party.length < 3) s.party.push(id);
+    refreshAvailability(s);
+  }
   ensureMember(id: string) {
     const s = this.s; if (s.members[id]) return;
-    const lv = Math.max(1, s.members.hero.lv - 1); s.members[id] = { id, lv, exp: 0, hp: 1, mp: 1 };
+    const lv = id === 'mizhou' ? s.members.hero.lv : Math.max(1, s.members.hero.lv - 1);
+    s.members[id] = { id, lv, exp: 0, hp: 1, mp: 1 };
     const st = memberStats(s, id); s.members[id].hp = st.maxHp; s.members[id].mp = st.maxMp;
   }
   save() {
@@ -292,7 +354,7 @@ class GameController {
     const ok = saveGame(this.s);
     this.ui.toast({ title: ok ? '存檔完成' : '存檔失敗', text: ok ? '冒險紀錄已經記住了喵！' : '瀏覽器不允許存檔' });
   }
-  questTitle(id: string) { const q = QUESTS[id]; return `${q.chapter === 2 ? '第二章・' : ''}${q.kind === 'main' ? '主線' : '支線'} ${q.no}：${q.title}`; }
+  questTitle(id: string) { const q = QUESTS[id]; return `${questChapterPrefix(q.chapter)}${q.kind === 'main' ? '主線' : '支線'} ${q.no}：${q.title}`; }
   check = (c: any) => check(this.s, c);
 }
 export const G = new GameController();

@@ -2,9 +2,9 @@
 // 用 WebAudio 播放：無縫循環、換場景時淡入淡出；要等玩家第一次點擊後才會開始（手機規定）。
 import { ac, buses, onUnlock, loadBuf } from './sfx';
 
-export type TrackId = 'title' | 'village' | 'field' | 'forest' | 'battle' | 'boss' | 'mist' | 'roots' | 'echo' | 'boss2' | 'feast';
+export type TrackId = 'title' | 'village' | 'field' | 'forest' | 'battle' | 'boss' | 'mist' | 'roots' | 'echo' | 'boss2' | 'feast' | 'reed' | 'banks' | 'boss3';
 declare const __FINALE_FALLBACKS__: Record<string, string>;
-const FILES: Record<TrackId | 'victory', string> = { title: 'bgm_title', village: 'bgm_village', field: 'bgm_field', forest: 'bgm_forest', mist: 'bgm_mist', roots: 'bgm_roots', echo: 'bgm_echo', battle: 'bgm_battle', boss: 'bgm_boss', boss2: 'bgm_boss2', feast: 'bgm_feast', victory: 'bgm_victory' };
+const FILES: Record<TrackId | 'victory', string> = { title: 'bgm_title', village: 'bgm_village', field: 'bgm_field', forest: 'bgm_forest', mist: 'bgm_mist', roots: 'bgm_roots', echo: 'bgm_echo', battle: 'bgm_battle', boss: 'bgm_boss', boss2: 'bgm_boss2', feast: 'bgm_feast', reed: 'bgm_reed', banks: 'bgm_banks', boss3: 'bgm_boss3', victory: 'bgm_victory' };
 const LEVEL: Record<string, number> = { title: 0.9, village: 0.85, field: 0.85, battle: 0.8, victory: 0.9 };
 
 let cur: { id: string; src: AudioBufferSourceNode; gain: GainNode } | null = null; let want: TrackId | null = null; let token = 0;
@@ -32,7 +32,7 @@ export const music = {
     onUnlock(() => {
       if (my !== token) return;
       if (cur?.id === id) return;
-      const fast = id === 'battle' || id === 'boss' || id === 'boss2'; stopCur(fast ? 0.35 : 1.0);
+      const fast = id === 'battle' || id === 'boss' || id === 'boss2' || id === 'boss3'; stopCur(fast ? 0.35 : 1.0);
       if (id) start(id, true, fast ? 0.3 : 1.2, my);
     });
   },

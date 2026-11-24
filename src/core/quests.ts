@@ -5,6 +5,9 @@ import { addExp, bondOf, equipBetterWeapon } from './state';
 import { bus } from './bus';
 import { ITEMS } from '../data/items';
 
+export function questChapterPrefix(chapter: QuestDef['chapter']) {
+  return chapter === 3 ? '第三章・' : chapter === 2 ? '第二章・' : '';
+}
 export function currentObjective(s: GameState, qid: string) {
   const def = QUESTS[qid]; const qs = s.quests[qid]; if (!qs || qs.status !== 'active') return undefined;
   for (const o of def.objectives) if ((qs.prog[o.id] ?? 0) < (o.count ?? 1)) return o;
@@ -28,7 +31,7 @@ export function startQuest(s: GameState, id: string) {
   qs.status = 'active';
   const def = QUESTS[id];
   if (def.kind === 'main' || !s.tracked || s.quests[s.tracked]?.status !== 'active') s.tracked = id;
-  if (def.id !== 'main1') bus.emit('toast', { kind: 'quest', title: `${def.kind === 'main' ? '主線' : '支線'}任務開始`, text: def.chapter === 2 ? `第二章・${def.title}` : def.title });
+  if (def.id !== 'main1') bus.emit('toast', { kind: 'quest', title: `${def.kind === 'main' ? '主線' : '支線'}任務開始`, text: questChapterPrefix(def.chapter) + def.title });
   bus.emit('questsChanged');
 }
 // 物件類事件：talk / reach / inspect / defeat / resolve / collect
