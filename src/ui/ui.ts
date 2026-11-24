@@ -1,19 +1,21 @@
-import { chapterOf, HERO_TITLES, heroTier, heroTitle, TITLE_GIFTS } from '../core/hearts';
+import { chapterOf, CHAPTER_STATS, HERO_TITLES, heroTier, heroTitle, TITLE_GIFTS, visibleStats } from '../core/hearts';
 import { G, type UIHooks } from '../core/game';
-import { memberStats, hasSave, loadGame, bondOf, equipBetterWeapon } from '../core/state';
+import { availableSkills, memberStats, hasSave, loadGame, bondOf, equipBetterWeapon } from '../core/state';
 import { expToNext, MAX_BOND, MEMBERS } from '../data/characters';
 import { QUESTS } from '../data/quests';
-import { ITEMS, STICKERS } from '../data/items';
-import { currentObjective } from '../core/quests';
+import { ITEMS, STICKERS, stickerPictures } from '../data/items';
+import { currentObjective, questChapterPrefix } from '../core/quests';
 import { sfx, settings, saveSettings } from '../core/sfx';
 import { music } from '../core/music';
 import { NPCS } from '../data/npcs';
 import { objDone } from '../core/conditions';
 
 declare const __FINALE_FALLBACKS__: Record<string, string>;
-export const A = (k: string) => { let f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'mistbg', 'echobg', 'denbg', 'c2_ending', 'title'].includes(k) ? 'jpg' : 'png'}`; f = __FINALE_FALLBACKS__[f] ?? f; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
+export const A = (k: string) => { let f = `${k}.${['prologue1', 'prologue2', 'prologue3', 'battlebg', 'forestbg', 'mistbg', 'echobg', 'denbg', 'reedbg', 'bridgebg', 'c2_ending', 'c3_ending', 'title'].includes(k) ? 'jpg' : 'png'}`; f = __FINALE_FALLBACKS__[f] ?? f; return ((window as any).__MCV_ASSETS?.[f] as string) ?? `./assets/${f}`; };
 import { quizPanel } from './quiz';
-import { STICKER_PAGES, bookCount, bookTotal, bookPages, chapter1Collection } from '../data/items';
+import { readLetter, showLetterList, writeLetter } from './letters';
+import { boostedHealing } from '../core/battle';
+import { STICKER_PAGES, bookCount, bookTotal, bookPages, chapter1Collection, chapter2MonsterStickers, chapter3MonsterStickers } from '../data/items';
 import { ENEMIES } from '../data/enemies';
 import { MAPS } from '../data/maps';
 import { LANTERNS, TRADES } from '../data/ch1c';
@@ -32,8 +34,8 @@ export class Hud {
   onAct: () => void = () => {}; onSys: () => void = () => {}; onQuests: () => void = () => {};
   constructor() {
     const r = root();
-    this.top.append(this.info, this.money, this.sysBtn);
-    r.append(this.top, this.tracker, this.mapName, this.joy, this.act);
+    this.top.append(this.info, this.money, this.sysBtn, this.tracker);
+    r.append(this.top, this.mapName, this.joy, this.act);
     this.joy.appendChild(this.knob);
     this.act.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); this.onAct(); });
     this.sysBtn.addEventListener('click', e => { e.stopPropagation(); this.onSys(); });
@@ -59,7 +61,8 @@ export class Hud {
   showMapName(n: string) { this.mapName.textContent = n; this.mapName.classList.add('show'); setTimeout(() => this.mapName.classList.remove('show'), 1600); }
   refresh() {
     const s = G.s; const st = memberStats(s, 'hero'); const m = s.members.hero;
-    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}・${heroTitle(s.courage)}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div><div class="hud-values"><span>🦁 勇氣值 ${s.courage}</span><span>💗 善良值 ${s.kindness}</span></div>`;
+    const extraStats = visibleStats(s).map(key => `<span>${CHAPTER_STATS[key].label} ${s[key]}</span>`).join('');
+    this.info.innerHTML = `<div class="hud-name">${s.name}<small>Lv ${m.lv}・${heroTitle(s.courage)}</small></div><div class="bar"><i style="width:${(m.hp / st.maxHp) * 100}%"></i></div><div style="font-size:11px">HP ${m.hp}/${st.maxHp}</div><div class="hud-values"><span>🦁 勇氣值 ${s.courage}</span><span>💗 善良值 ${s.kindness}</span>${extraStats}</div>`;
     this.money.innerHTML = `🐟 ${s.money}`;
     this.sysBtn.classList.toggle('hidden', !s.flags.system);
     const q = s.tracked && s.quests[s.tracked]?.status === 'active' ? s.tracked : undefined;
@@ -112,19 +115,21 @@ export class DialogueBox {
 
 // ---------- 喵喵勇者系統面板 ----------
 export function openSystemPanel(tab = 'status'): Promise<void> {
-  let journalChapter = tab === 'journal1' ? 1 : tab === 'journal2' ? 2 : chapterOf(G.s);
+  let journalChapter = tab === 'journal1' ? 1 : tab === 'journal2' ? 2 : tab === 'journal3' ? 3 : Math.min(3, chapterOf(G.s));
   if (tab.startsWith('journal')) tab = 'journal';
   return new Promise(res => {
     const wrap = el('div', 'sys-wrap', '', root()); const p = el('div', 'sys-panel', '', wrap);
     const head = el('div', 'sys-head', '🐾 喵喵勇者系統', p); const x = el('button', 'x', '✕', head);
     const tabs = el('div', 'sys-tabs', '', p); const body = el('div', 'sys-body', '', p);
     const hasParty = Object.values(G.s.members).some(m => m.joined) || !!G.s.guest;
-    const names: [string, string][] = [['status', '屬性'], ...(hasParty || tab === 'party' ? [['party', '隊伍'] as [string, string]] : []), ['quests', '任務'], ['items', '道具'], ...(G.s.inventory.sticker_book ? [['stickers', '貼紙'] as [string, string]] : []), ['journal', '勇士日記'], ['settings', '設定']];
+    const hasLetters = G.s.letters.length > 0;
+    const hasSeedpot = G.s.inventory.c3_seedpot > 0;
+    const names: [string, string][] = [['status', '屬性'], ...(hasParty || tab === 'party' ? [['party', '隊伍'] as [string, string]] : []), ['quests', '任務'], ['items', hasLetters || hasSeedpot ? '背包' : '道具'], ...(G.s.inventory.sticker_book ? [['stickers', '貼紙'] as [string, string]] : []), ['journal', '勇士日記'], ['settings', '設定']];
     let qtab: 'main' | 'side' = 'main'; let spage = 0;
     const tutorial = tab === 'status' && !G.s.flags.tut_status ? 'status' : tab === 'quests' && !G.s.flags.tut_quests ? 'quests' : '';
     const render = (t: string) => {
       tab = t; tabs.innerHTML = '';
-      names.forEach(([k, n]) => { const b = el('button', k === t ? 'on' : '', n, tabs); b.onclick = () => { sfx.blip(); render(k); }; });
+      names.forEach(([k, n]) => { const b = el('button', k === (t === 'letters' || t === 'important' ? 'items' : t) ? 'on' : '', n, tabs); b.onclick = () => { sfx.blip(); render(k); }; });
       const s = G.s; const st = memberStats(s, 'hero'); const m = s.members.hero;
       if (t === 'status') {
         body.innerHTML = `${tutorial === 'status' ? '<div class="tut">喵！這是妳的屬性頁。<br>・<b>勇氣值</b>越高，「對話」越容易讓魔物離開。<br>・<b>觀察力</b>越高，地圖上能看到越多「閃光點」。<br>兩個屬性都靠完成任務和事件提升喵！</div>' : ''}
@@ -135,6 +140,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         <div class="stat"><span>攻擊</span><b>${st.atk}</b></div><div class="stat"><span>防禦</span><b>${st.def}</b></div>
         <div class="stat"><span>速度</span><b>${st.spd}</b></div><div class="stat"><span>魚乾幣</span><b>${s.money}</b></div>
         <div class="stat hl"><span>🦁 勇氣值</span><b>${s.courage}</b></div><div class="stat hl"><span>💗 善良值</span><b>${s.kindness}</b></div><div class="stat hl"><span>🔍 觀察力</span><b>${s.observation}</b></div>
+        ${visibleStats(s).map(key => `<div class="stat hl"><span>${CHAPTER_STATS[key].label}</span><b>${s[key]}</b></div>`).join('')}
         </div>
         <small>稱號越高，魔物越願意聽妳說話</small><br>
         <small>${s.observation >= 5 ? '看得到魔物的心情和弱點' : s.observation >= 3 ? '看得到魔物的心情' : '在地圖上找閃光點'}${s.observation >= 4 ? '。答錯時有額外提示' : ''}</small>
@@ -159,13 +165,25 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         body.innerHTML = `${tutorial === 'quests' ? '<div class="tut">喵！這是任務日誌。上面可以切換「主線」和「支線」。按「追蹤」，目標就會顯示在畫面左上角喵！</div>' : ''}`;
         const sub = el('div', 'sub-tabs', '', body);
         (['main', 'side'] as const).forEach(k => { const b = el('button', k === qtab ? 'on' : '', k === 'main' ? '主線' : '支線', sub); b.onclick = () => { qtab = k; sfx.blip(); render('quests'); }; });
+        if (qtab === 'main' && s.quests.c3m1?.status === 'available') {
+          el('p', 'tut', '第三章　橋的另一頭：去大樹根村的大樹下找咕咕。', body);
+        }
         if (!list.length) el('div', 'empty', qtab === 'side' ? '還沒有接到支線任務。<br>頭上有「！」的村民可能需要幫忙喵。' : '沒有任務', body);
         for (const [k, v] of list) {
           const d = QUESTS[k]; const done = v.status === 'done';
           const it = el('div', 'q-item' + (s.tracked === k ? ' tracked' : '') + (done ? ' done-q' : ''), '', body);
-          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${d.chapter === 2 ? '第二章・' : ''}${d.no}. ${d.title}${d.bond ? ' <span class="tagline">羈絆</span>' : ''}`, it);
+          const h = el('h4', '', `${done ? '✅' : d.kind === 'main' ? '⭐' : '🐾'} ${questChapterPrefix(d.chapter)}${d.no}. ${d.title}${d.bond ? ' <span class="tagline">羈絆</span>' : ''}`, it);
           if (!done) { const tb = el('button', 'trk', s.tracked === k ? '追蹤中' : '追蹤', h); tb.onclick = () => { s.tracked = k; sfx.ok(); G.ui.refresh(); render('quests'); }; }
           el('p', '', d.summary + (d.autoStartAfter && s.quests[d.autoStartAfter]?.status === 'done' ? '（主線需要）' : '') + (d.giver ? `（請妳幫忙的是：${NPCS.find(n => n.id === d.giver)?.name ?? d.giver}）` : ''), it);
+          if (d.chapter === 3 && d.kind === 'side') {
+            const { exp, money, items, sticker } = d.rewards;
+            const gifts = [
+              exp && `經驗 +${exp}`, money && `魚乾幣 +${money}`,
+              ...(items ?? []).map(it => `${ITEMS[it.id].name} ×${it.n}`),
+              sticker && `「${STICKERS[sticker]}」貼紙`, ...(d.rewardText ?? []),
+            ].filter(Boolean);
+            el('p', '', '任務獎勵：' + gifts.join('、'), it);
+          }
           const ul = el('ul', '', '', it); const cur = currentObjective(s, k);
           d.objectives.forEach(o => { const od = objDone(s, k, o.id); if (d.ordered && !od && cur && o.id !== cur.id) return; el('li', od ? 'done' : '', `${od ? '☑' : '☐'} ${o.text}${o.count && o.count > 1 ? `（${v.prog[o.id] ?? 0}/${o.count}）` : ''}`, ul); });
         }
@@ -176,7 +194,7 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
         if (s.guest && !ids.includes(s.guest)) ids.push(s.guest);
         for (const id of ids) {
           const mm = s.members[id]; const d = MEMBERS[id]; const ms = memberStats(s, id); const on = s.party.includes(id); const guest = s.guest === id;
-          const row = el('div', 'mem-row' + (on || guest ? ' on' : ''), `<img src="${A(d.icon)}"><div class="mi"><b>${G.memberName(id)}</b> Lv${mm.lv}${guest ? ' <span class="tagline">同行中</span>' : ''}${id !== 'hero' && mm.joined ? ` <span class="bond" title="羈絆">${'❤'.repeat(bondOf(s, id))}${'♡'.repeat(Math.max(0, MAX_BOND - bondOf(s, id)))}</span>` : ''}<small>${id === 'hero' ? heroTitle(s.courage) : d.role}</small><small>HP ${mm.hp}/${ms.maxHp}・MP ${mm.mp}/${ms.maxMp}・攻 ${ms.atk}・防 ${ms.def}・速 ${ms.spd}</small><small>技能：${d.skills.filter(k => mm.lv >= k.learnLv && (!k.quest || s.skills?.[id]?.includes(k.id))).map(k => `${k.name}（${k.desc}）`).join('、')}</small></div>`, body);
+          const row = el('div', 'mem-row' + (on || guest ? ' on' : ''), `<img src="${A(d.icon)}"><div class="mi"><b>${G.memberName(id)}</b> Lv${mm.lv}${guest ? ' <span class="tagline">同行中</span>' : ''}${id !== 'hero' && mm.joined ? ` <span class="bond" title="羈絆">${'❤'.repeat(bondOf(s, id))}${'♡'.repeat(Math.max(0, MAX_BOND - bondOf(s, id)))}</span>` : ''}<small>${id === 'hero' ? heroTitle(s.courage) : d.role}</small><small>HP ${mm.hp}/${ms.maxHp}・MP ${mm.mp}/${ms.maxMp}・攻 ${ms.atk}・防 ${ms.def}・速 ${ms.spd}</small><small>技能：${availableSkills(s, id).map(k => `${k.name}（${k.desc}）`).join('、')}</small></div>`, body);
           const btns = el('div', 'mb', '', row);
           if (id !== 'hero' && !guest) {
             const b = el('button', on ? 'on' : '', on ? '上場中' : '休息中', btns);
@@ -187,9 +205,10 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
       } else if (t === 'journal') {
         body.innerHTML = '';
         const nav = el('div', 'sub-tabs', '', body);
-        for (const n of [1, 2]) {
+        for (const [n, label] of [[1, '第一章'], [2, '第二章'], [3, '第三章']] as const) {
           if (n === 2 && !s.quests.c2m1) continue;
-          const b = el('button', n === journalChapter ? 'on' : '', n === 1 ? '第一章' : '第二章', nav);
+          if (n === 3 && !visibleStats(s).includes('friendship')) continue;
+          const b = el('button', n === journalChapter ? 'on' : '', label, nav);
           b.onclick = () => { journalChapter = n; render('journal'); };
         }
         const j = s.journal[journalChapter];
@@ -200,10 +219,19 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
           [j.friends, `和魔物交了 ${j.friends} 次朋友`, '謝謝妳願意聽魔物說話。'],
         ];
         const praise = lines.reduce((best, line) => line[0] > best[0] ? line : best);
-        el('div', 'journal-page', `${badge(heroTier(s.courage))}<h3>${heroTitle(s.courage)}</h3>
+        const page = el('div', 'journal-page', `${badge(heroTier(s.courage))}<h3>${heroTitle(s.courage)}</h3>
           <p>🦁 ${s.courage}　🔍 ${s.observation}　💗 ${s.kindness}</p>
           ${lines.filter(([n]) => n).map(([, line]) => `<p>${line}</p>`).join('')}
           <p>${praise[0] ? praise[2] : '今天也踏出了一小步。'}</p>`, body);
+        if (journalChapter === 3) {
+          page.classList.add('river-journal');
+          const memories = el('section');
+          el('h3', '', '橋的另一頭', memories);
+          el('p', '', `這一章拿到的友誼值 🤝 ${j.friendship}`, memories);
+          const events = el('ul', '', '', memories);
+          for (const event of j.friendshipEvents) el('li', '', '', events).textContent = event;
+          page.prepend(memories);
+        }
       } else if (t === 'stickers') {
         body.innerHTML = `<div class="sb-head">📒 喵喵貼紙簿：<b>${bookCount(s.stickers)}</b> / ${bookTotal()} 張</div>`;
         const sub = el('div', 'sub-tabs', '', body);
@@ -214,22 +242,53 @@ export function openSystemPanel(tab = 'status'): Promise<void> {
           pg.ids.forEach(id => el('div', 'sb-st have', `<img src="${A(ENEMIES[id].sprite)}" alt=""><small>${ENEMIES[id].name} ×${s.befriended[id]}</small>`, grid));
           return;
         }
-        pg.ids.forEach((i, k) => { const ic = STICKER_ICON[pg.id] ?? ['⭐']; const have = s.stickers.includes(i); el('div', 'sb-st' + (have ? ' have ' + pg.id : ''), have ? `<span>${ic[k % ic.length]}</span><small>${STICKERS[i]}</small>` : '<span>？</span><small>還沒拿到</small>', grid); });
+        pg.ids.forEach((id, k) => {
+          const have = s.stickers.includes(id);
+          const cell = el('div', 'sb-st' + (have ? ' have ' + pg.id : ''), '', grid);
+          if (have && stickerPictures[id]) {
+            const img = el('img', '', '', cell);
+            img.src = A(stickerPictures[id]);
+            img.alt = '';
+          } else {
+            const icons = STICKER_ICON[pg.id] ?? ['⭐'];
+            el('span', '', have ? icons[k % icons.length] : '？', cell);
+          }
+          el('small', '', have ? STICKERS[id] : '還沒拿到', cell);
+        });
         el('div', 'sb-tip', '集滿 10、20、30、40、50 張，或是集滿第一章的貼紙，可以去長老家領獎勵喵！貼紙會越來越多喔。', body);
         if (pg.id === 'monster' && (chapter1Collection.monsters ?? STICKER_PAGES.find(c => c.id === 'monster')?.ids ?? []).every(i => s.stickers.includes(i))) { const b = el('button', 'qz-next', '📖 打開魔物圖鑑', body); b.onclick = () => { sfx.blip(); bestiary(body); }; }
       } else if (t === 'settings') {
         body.innerHTML = '';
         soundSettings(body);
       } else {
-        const inv = Object.entries(s.inventory).filter(([, n]) => n > 0);
-        body.innerHTML = inv.length ? '' : '<div class="empty">還沒有道具。</div>';
+        body.replaceChildren();
+        if (hasLetters || hasSeedpot) {
+          const sections = el('div', 'sub-tabs', '', body);
+          const groups = [['items', '道具']];
+          if (hasSeedpot) groups.push(['important', '重要物品']);
+          if (hasLetters) groups.push(['letters', '信']);
+          for (const [id, label] of groups) {
+            el('button', t === id ? 'on' : '', label, sections).onclick = () => { sfx.blip(); render(id); };
+          }
+          if (t === 'letters') { showLetterList(body, s.letters); return; }
+        }
+        const inv = Object.entries(s.inventory).filter(([id, n]) =>
+          n > 0 && (!hasSeedpot || (ITEMS[id].kind === 'key') === (t === 'important')));
+        if (t === 'important') inv.sort(([a], [b]) => Number(b === 'c3_seedpot') - Number(a === 'c3_seedpot'));
+        if (!inv.length) el('div', 'empty', '還沒有道具。', body);
         for (const [id, n] of inv) {
           const d = ITEMS[id]; const row = el('div', 'inv-row', `<div><b>${d.name}</b> ×${n}<small>${d.desc}</small></div>`, body);
+          if (id === 'c3_seedpot') {
+            const icon = el('img', 'seedpot-icon');
+            icon.src = A(id); icon.alt = '';
+            row.prepend(icon);
+          }
           if (d.kind === 'heal') { const b = el('button', '', '使用', row); b.onclick = () => {
             const ids = [...s.party, ...(s.guest ? [s.guest] : [])]; const pick = ids.map(i => ({ i, r: s.members[i].hp / memberStats(s, i).maxHp })).sort((a, b) => a.r - b.r)[0];
             if (!pick || pick.r >= 1) { G.ui.toast({ title: '不需要', text: '大家的 HP 都是滿的' }); return; }
-            if (d.healAll) { for (const i of ids) { const st2 = memberStats(s, i); s.members[i].hp = Math.min(st2.maxHp, s.members[i].hp + (d.heal ?? 0)); } s.inventory[id]--; sfx.heal(); toast({ title: '回復', text: `全隊 HP +${d.heal}` }); G.ui.refresh(); render('items'); return; }
-            const mm = s.members[pick.i]; const st = memberStats(s, pick.i); const before = mm.hp; mm.hp = Math.min(st.maxHp, mm.hp + (d.heal ?? 0)); s.inventory[id]--; sfx.heal(); toast({ title: '回復', text: `${G.memberName(pick.i)} HP +${mm.hp - before}` }); G.ui.refresh(); render('items'); }; }
+            const amount = boostedHealing(d.heal ?? 0, s.love);
+            if (d.healAll) { for (const i of ids) { const st2 = memberStats(s, i); s.members[i].hp = Math.min(st2.maxHp, s.members[i].hp + amount); } s.inventory[id]--; sfx.heal(); toast({ title: '回復', text: `全隊 HP +${amount}` }); G.ui.refresh(); render('items'); return; }
+            const mm = s.members[pick.i]; const st = memberStats(s, pick.i); const before = mm.hp; mm.hp = Math.min(st.maxHp, mm.hp + amount); s.inventory[id]--; sfx.heal(); toast({ title: '回復', text: `${G.memberName(pick.i)} HP +${mm.hp - before}` }); G.ui.refresh(); render('items'); }; }
         }
         if (s.inventory.sticker_book) el('div', '', `<div style="margin-top:12px">📒 喵喵貼紙簿：${bookCount(s.stickers)} / ${bookTotal()} 張（在「貼紙」頁可以看）</div>`, body);
       }
@@ -296,7 +355,7 @@ export function fade(text = '', white = false): Promise<void> { fadeEl?.remove()
 export function unfade(): Promise<void> { const f = fadeEl; if (!f) return Promise.resolve(); f.classList.remove('on'); fadeEl = null; return wait(650).then(() => f.remove()); }
 
 export function makeHooks(hud: Hud, dlg: DialogueBox): UIHooks {
-  return { celebrate: (tier) => reward(`叮！${G.s.name}變成『${HERO_TITLES[tier]}』了喵！`, [
+  return { writeLetter, readLetter, celebrate: (tier) => reward(`叮！${G.s.name}變成『${HERO_TITLES[tier]}』了喵！`, [
     TITLE_GIFTS[tier], `新貼紙：${HERO_TITLES[tier]}`, '妳害怕的時候，還是往前走了。',
   ], tier), dialogue: dlg, activateSystem, openPanel: openSystemPanel, reward, fade, unfade, toast, refresh: () => hud.refresh(), shop: shopPanel, chapterEnd: chapterEndScreen, quiz: quizPanel, travel: travelPanel, stickerBoard: async () => {}, trade: tradePanel };
 }
@@ -329,23 +388,31 @@ export function shopPanel(items: { id: string; price: number }[], title = '🌿 
   });
 }
 
-// ---------- 第一章完成 ----------
-export function chapterEndScreen(chapter?: 2): Promise<void> {
-  if (chapter === 2) {
+// ---------- 章末 ----------
+export function chapterEndScreen(chapter?: 2 | 3): Promise<void> {
+  if (chapter) {
     const s = G.s;
-    const sides = Object.values(QUESTS).filter(q => q.chapter === 2 && q.kind === 'side');
-    const ch1Monsters = new Set(chapter1Collection.monsters);
-    const sideStickers = new Set(sides.map(q => q.rewards.sticker));
-    const stickers = STICKER_PAGES.flatMap(page =>
-      page.id === 'forest_depths' ? page.ids : page.id === 'monster' ? page.ids.filter(id => !ch1Monsters.has(id))
-        : page.id === 'wonder' ? page.ids.filter(id => sideStickers.has(id)) : []);
-    const screen = el('div', 'chap-end chapter-two on', '', root());
-    screen.style.backgroundImage = `url(${A('c2_ending')})`;
-    const card = el('div', 'ce-card', `<h2>第二章　森林深處　完成喵！</h2>
+    const quests = Object.values(QUESTS).filter(q => q.chapter === chapter);
+    const counts = (kind: 'main' | 'side') => {
+      const group = quests.filter(q => q.kind === kind);
+      return `${group.filter(q => s.quests[q.id]?.status === 'done').length} / ${group.length}`;
+    };
+    const questStickers = quests.flatMap(q => q.rewards.sticker ? [q.rewards.sticker] : []);
+    const stickers = chapter === 3 ? [...new Set([...chapter3MonsterStickers, ...questStickers])]
+      : STICKER_PAGES.flatMap(page =>
+        page.id === 'forest_depths' ? page.ids : page.id === 'monster' ? chapter2MonsterStickers
+          : page.id === 'wonder' ? page.ids.filter(id => questStickers.includes(id)) : []);
+    const screen = el('div', 'chap-end illustrated-ending on ' + (chapter === 3 ? 'chapter-three' : 'chapter-two'), '', root());
+    screen.style.backgroundImage = `url(${A('c' + chapter + '_ending')})`;
+    const title = chapter === 3 ? '第三章完成喵！' : '第二章　森林深處　完成喵！';
+    const next = chapter === 3 ? '第四章　水輪少了一格（製作中）' : '第三章　橋的另一頭';
+    const card = el('div', 'ce-card', `<h2>${title}</h2>
       <div class="ce-stats">
-        <div><span>完成的支線</span><b>${sides.filter(q => s.quests[q.id]?.status === 'done').length} / ${sides.length}</b></div>
+        ${chapter === 3 ? `<div><span>完成的主線</span><b>${counts('main')}</b></div>` : ''}
+        <div><span>完成的支線</span><b>${counts('side')}</b></div>
         <div><span>喵喵貼紙</span><b>${stickers.filter(id => s.stickers.includes(id)).length} / ${stickers.length}</b></div>
-      </div><div class="ce-next"><div>下一章</div><h1>第三章（製作中）</h1></div>`, screen);
+        ${chapter === 3 ? `<div><span>🤝 友誼值</span><b>${s.journal[3].friendship}</b></div>` : ''}
+      </div><div class="ce-next"><div>下一章</div><h1>${next}</h1>${chapter === 2 ? '<small>去大樹根村的大樹下找咕咕。</small>' : ''}</div>`, screen);
     sfx.chime();
     return new Promise(resolve => {
       el('button', 'big-btn', '繼續冒險', card).onclick = () => { sfx.ok(); screen.remove(); resolve(); };
@@ -377,7 +444,7 @@ export function titleScreen(): Promise<'new' | 'continue'> {
     if (save) { const c = el('button', 'big-btn', `繼續遊戲<div style="font-size:13px">${save.name}・Lv ${save.members.hero.lv}</div>`, m); c.onclick = () => { sfx.unlock(); sfx.ok(); sc.remove(); res('continue'); }; }
     const n = el('button', 'big-btn' + (save ? ' alt' : ''), '新遊戲', m);
     n.onclick = () => { sfx.unlock(); sfx.ok(); if (save && !confirm('開始新遊戲會覆蓋原本的存檔（存檔時）。確定嗎？')) return; sc.remove(); res('new'); };
-    el('div', 'version', '試玩版 0.10.0', sc);
+    el('div', 'version', '試玩版 0.11.0', sc);
     const sb = el('button', 'title-snd', settings.music || settings.sfx ? '🔊' : '🔇', sc);
     sb.onclick = (e) => { e.stopPropagation(); const on = !(settings.music || settings.sfx); settings.music = on; settings.sfx = on; saveSettings(); sb.textContent = on ? '🔊' : '🔇'; if (on) sfx.ok(); };
     music.play('title');
