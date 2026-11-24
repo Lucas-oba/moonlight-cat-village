@@ -61,6 +61,9 @@ export const STICKERS: Record<string, string> = {
   shiny_slime: '閃亮史萊姆', shiny_goblin: '閃亮哥布林', shiny_bat: '閃亮蝙蝠怪', shiny_fgoblin: '閃亮森林哥布林', shiny_wolf: '閃亮野狼', shiny_mushroom: '閃亮蘑菇怪',
 };
 // 動態計算（其他資料檔可能之後才把貼紙加進 STICKER_PAGES）
+export const chapter2MonsterStickers: string[] = [];
+export const chapter3MonsterStickers: string[] = [];
+export const stickerPictures: Record<string, string> = {};
 export const chapter1Collection: { all?: string[]; monsters?: string[] } = {};
 export const bookIds = () => STICKER_PAGES.flatMap(p => p.ids);
 export const bookTotal = () => bookIds().length;

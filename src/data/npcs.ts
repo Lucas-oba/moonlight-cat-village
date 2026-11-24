@@ -1,6 +1,7 @@
 import type { NpcDef } from './types';
 const T = 32;
 export const NPCS: NpcDef[] = [
+  { id: 'mizhou', name: '米舟', sprite: 'mizhou', portrait: 'mizhou_big', isCat: true, spots: [], talk: [] },
   {
     id: 'whitecat', name: '小白貓', sprite: 'whitecat', portrait: 'whitecat_big', isCat: true, voice: { base: 880, len: 0.3, type: 'sine', bend: 1.25, drop: 0.8, vib: 7, bright: 1.4 },
     spots: [
