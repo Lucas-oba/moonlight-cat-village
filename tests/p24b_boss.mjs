@@ -141,7 +141,7 @@ try {
   await advance(page, { stopOn: () => page.locator('.chapter-two').isVisible() });
   const ending = page.locator('.chapter-two');
   assert.match(await ending.textContent(), /第二章　森林深處　完成喵！/);
-  assert.match(await ending.textContent(), /第三章（製作中）/);
+  assert.equal(await ending.locator('.ce-next h1').textContent(), '第三章　橋的另一頭');
   assert.match(await ending.textContent(), /完成的支線4 \/ 20/);
   await capture('16_ending');
   await ending.getByRole('button', { name: '繼續冒險' }).tap();
