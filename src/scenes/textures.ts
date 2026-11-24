@@ -3,7 +3,7 @@ import { TILE } from '../data/maps';
 // 程式繪製的像素地面與小圖示（暖色、童話感，與生成的美術素材搭配）
 function rng(seed: number) { return () => { seed = (seed * 16807) % 2147483647; return (seed & 0xffff) / 0x10000; }; }
 const SOLID_GRASS = '.,TGx';
-export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false, mist = false, valley = false) {
+export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], forest = false, mist = false, valley = false, riverbank = false) {
   const h = tiles.length, w = tiles[0].length; const T = TILE;
   const tex = scene.textures.createCanvas(key, w * T, h * T)!; const c = tex.getContext(); const r = rng(1234 + w * h);
   const at = (x: number, y: number) => (y < 0 || y >= h || x < 0 || x >= w) ? 'T' : tiles[y][x];
@@ -78,6 +78,13 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
           c.fillStyle = '#c9c294'; c.fillRect(X, bank, T, 3);
           c.fillStyle = '#a7d8c9'; c.fillRect(X + 3, bank + dy * -3, 20, 2);
         }
+        if (riverbank) for (const side of [-1, 1]) {
+          if ('vbBC'.includes(at(x + side, y))) continue;
+          const edge = X + (side < 0 ? 0 : T - 3);
+          c.fillStyle = '#b3ae86'; c.fillRect(edge, Y, 3, T);
+          c.fillStyle = '#a7d8c9'; c.fillRect(edge - side * 3, Y + 2, 3, 19);
+          c.fillStyle = '#83c5c1'; c.fillRect(edge - side * 7, Y + 13, 2, 11);
+        }
         break;
       }
       case 'w': {
@@ -85,6 +92,17 @@ export function buildGround(scene: Phaser.Scene, key: string, tiles: string[], f
         for (let i = 0; i < 3; i++) { c.fillStyle = '#8fd0f5'; c.fillRect(X + r() * 24, Y + 4 + r() * 24, 6, 2); }
         if (at(x, y - 1) !== 'w' && at(x, y - 1) !== 'b') { c.fillStyle = '#6aae4c'; c.fillRect(X, Y, T, 3); c.fillStyle = '#3b86bd'; c.fillRect(X, Y + 3, T, 3); }
         if (at(x, y + 1) !== 'w' && at(x, y + 1) !== 'b') { c.fillStyle = '#2f6f9e'; c.fillRect(X, Y + T - 4, T, 4); }
+        break;
+      }
+      case 'B': { // 河上的橫向木橋和兩岸的小船埠
+        c.fillStyle = '#57a5af'; c.fillRect(X, Y, T, T);
+        c.fillStyle = '#c69b61'; c.fillRect(X, Y + 5, T, 23);
+        for (let plank = 0; plank < 4; plank++) {
+          c.fillStyle = '#815831'; c.fillRect(X + plank * 8, Y + 5, 2, 23);
+          c.fillStyle = '#ddb57b'; c.fillRect(X + plank * 8 + 2, Y + 6, 2, 18);
+        }
+        c.fillStyle = '#765237'; c.fillRect(X, Y + 3, T, 3); c.fillRect(X, Y + 27, T, 3);
+        c.fillStyle = '#f1d092'; c.fillRect(X, Y + 3, T, 1); c.fillRect(X, Y + 27, T, 1);
         break;
       }
       case 'b': {

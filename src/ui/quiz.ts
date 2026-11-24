@@ -1,4 +1,5 @@
 import { CH2_QUIZ } from '../data/quiz_ch2';
+import { CH3_SCHOOL_QUIZ } from '../data/quiz_ch3';
 // 喵喵小學堂：解題面板（大大的選項按鈕；答錯沒有懲罰，貓咪給提示再試一次）
 import { el, root, A } from './ui';
 import { G } from '../core/game';
@@ -7,12 +8,13 @@ import { NPCS } from '../data/npcs';
 import { QUIZ, SUBJECT_NAME, PRAISE, RETRY, type QuizQ, type Subject } from '../data/quiz';
 export interface QuizOpts { subject?: Subject | 'mix'; tier?: number; n?: number; by?: string; title?: string; ids?: string[] }
 const pick = <T,>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+const chapterQuestions = new Map([...CH2_QUIZ, ...Object.values(CH3_SCHOOL_QUIZ).flat()].map(q => [q.id, q]));
 function shuffle<T>(a: T[]) { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; }
 // 選題：同科目、同難度；最近做過的題目先不出
 export function chooseQuestions(o: QuizOpts): QuizQ[] {
   const s = G.s; const qz = (s.quiz ??= { seen: [], correct: 0, wrong: 0 });
   if (o.ids) {
-    const questions = o.ids.map(id => QUIZ.find(q => q.id === id) ?? CH2_QUIZ.find(q => q.id === id))
+    const questions = o.ids.map(id => QUIZ.find(q => q.id === id) ?? chapterQuestions.get(id))
       .filter((q): q is QuizQ => q !== undefined);
     return o.n == null ? questions : shuffle(questions).slice(0, o.n);
   }
