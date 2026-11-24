@@ -160,6 +160,10 @@ TUNE='{"ENEMIES":{"rock":{"atk":20}}}' node sim/out/sim.mjs 600 巨岩   # 試�
 
 ## 三顆勇士之心比較
 
+模擬器可另外設定第三～六章的數值。例如
+`node sim/out/sim.mjs 1000 苔角 --friendship 15 --honesty 10 --love 20 --hope 5 --seed 123 --json /tmp/antler.json`。
+四個數值都預設為 0，報告會列出設定。兩次一般戰鬥模擬給相同的 `--seed` 和場次，就會用同一組逐場亂數。
+
 執行 `node sim/build.mjs`，再執行 `node sim/out/sim.mjs 3000 --stats sim/stats_010.json`。
 每個遊戲情境、等級、隊伍各跑 3,000 場。新舊兩版每場使用相同的起始亂數種子，並使用同一套小孩操作方式。新版的觀察力、善良值及戰前認識的森林朋友以所在的等級區間設定。結果包含勝敗、卡住、回合、剩餘 HP 及對話結束比例。
 
