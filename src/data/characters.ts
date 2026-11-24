@@ -1,6 +1,7 @@
 // 隊伍成員（最多 3 人上場）。數值暫定。
-export type SkillKind = 'attack' | 'taunt' | 'guard' | 'heal' | 'cure' | 'allFoes' | 'dash' | 'guardAll' | 'healAll' | 'peek' | 'purr' | 'sleepFoe' | 'splitGuard' | 'regenAll' | 'deliver' | 'healCleanse';
-export interface SkillDef { id: string; name: string; mp: number; power: number; desc: string; learnLv: number; kind: SkillKind; quest?: boolean; once?: boolean; }
+export type SkillKind = 'attack' | 'taunt' | 'guard' | 'heal' | 'cure' | 'allFoes' | 'dash' | 'guardAll' | 'healAll' | 'peek' | 'purr' | 'sleepFoe' | 'splitGuard' | 'regenAll' | 'deliver' | 'healCleanse'
+  | 'cushionGuard' | 'paddleSlow' | 'rowTogether' | 'ferryLight';
+export interface SkillDef { id: string; name: string; mp: number; power: number; desc: string; learnLv: number; kind: SkillKind; quest?: boolean; once?: boolean; minBond?: number; }
 export interface MemberDef { id: string; name: string; role: string; icon: string; base: { hp: number; mp: number; atk: number; def: number; spd: number }; grow: { hp: number; mp: number; atk: number; def: number; spd: number }; skills: SkillDef[]; verb: string; }
 export const MEMBERS: Record<string, MemberDef> = {
   hero: { id: 'hero', name: '{name}', role: '初期勇士', icon: 'hero_big', verb: '揮動木劍', base: { hp: 32, mp: 8, atk: 7, def: 3, spd: 6 }, grow: { hp: 6, mp: 2, atk: 2, def: 1, spd: 1 },
@@ -29,6 +30,17 @@ export const MEMBERS: Record<string, MemberDef> = {
       { id: 'peek', name: '偷偷看', mp: 1, power: 0, desc: '偷偷看魔物還有多少 HP，和「對話」成功率。', learnLv: 1, kind: 'peek', quest: true },
       { id: 'quick_delivery', name: '快遞喵！', mp: 0, power: 0, desc: '給一位隊友用道具。可以再選指令，每場限用 1 次。', learnLv: 1, kind: 'deliver', quest: true, once: true },
     ] },
+  mizhou: {
+    id: 'mizhou', name: '米舟', role: '船家學徒（站中間保護隊友）', icon: 'mizhou', verb: '用船槳輕輕一拍',
+    base: { hp: 36, mp: 10, atk: 6, def: 5, spd: 6 },
+    grow: { hp: 7, mp: 2, atk: 1, def: 2, spd: 1 },
+    skills: [
+      { id: 'cushion_guard', name: '船墊護一下', mp: 2, power: 0, learnLv: 1, kind: 'cushionGuard', desc: '選一位隊友。這回合第一次被打時，船墊會擋掉一半傷害。' },
+      { id: 'paddle_tap', name: '划槳拍', mp: 3, power: 0.9, learnLv: 1, kind: 'paddleSlow', desc: '用船槳輕輕一拍。魔物下回合會變慢。' },
+      { id: 'row_together', name: '一起划！', mp: 3, power: 1.25, learnLv: 1, minBond: 2, kind: 'rowTogether', desc: '選一位隊友。這回合米舟和隊友的攻擊都會變強。' },
+      { id: 'ferry_light', name: '渡口的燈', mp: 5, power: 12, learnLv: 1, minBond: 4, kind: 'ferryLight', desc: '全隊回復 12 HP。幫一位隊友解除一種不舒服。' },
+    ],
+  },
 };
 export const MAX_BOND = 4;
 export const MAX_PARTY = 3;
